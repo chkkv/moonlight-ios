@@ -36,7 +36,39 @@ jobs:
           submodules: recursive
 
       - name: Download ${{ matrix.platform }} platform
-        run: xcodebuild -downloadPlatform ${{ matrix.platform }}
+        run: |
+          set -eu
+
+          # Warm up CoreSimulatorService first. Without this, the command below
+          # intermittently dies with "Unable to connect to simulator." (exit 70)
+          # on macOS runners, because the core simulator fails to rebuild its
+          # caches in time. See:
+          # https://github.com/actions/runner-images/issues/13459
+          # https://github.com/actions/runner-images/issues/12862
+          xcrun simctl list > /dev/null 2>&1 || true
+
+          # The runner images already ship the simulator runtimes tied to the
+          # default Xcode, and downloading them again is what triggers the bug
+          # above, so skip the download whenever the runtime is present.
+          runtimes="$(xcrun simctl list runtimes 2>&1 || true)"
+          if printf '%s\n' "$runtimes" | grep -i "${{ matrix.platform }}" > /dev/null; then
+            echo "${{ matrix.platform }} simulator runtime is already installed, skipping download."
+            printf '%s\n' "$runtimes"
+            exit 0
+          fi
+
+          # Not installed: download it, retrying on the known flaky failures.
+          for attempt in 1 2 3; do
+            if xcodebuild -downloadPlatform ${{ matrix.platform }}; then
+              echo "${{ matrix.platform }} platform downloaded on attempt ${attempt}."
+              exit 0
+            fi
+            echo "::warning::xcodebuild -downloadPlatform ${{ matrix.platform }} failed on attempt ${attempt}, retrying..."
+            sleep 15
+          done
+
+          echo "::error::Failed to download the ${{ matrix.platform }} platform after 3 attempts."
+          exit 1
 
       - name: Build Debug
         run: xcodebuild -project Moonlight.xcodeproj -scheme "${{ matrix.scheme }}" -configuration Debug -sdk ${{ matrix.sdk }} clean build
