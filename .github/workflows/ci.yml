@@ -6,9 +6,21 @@ on:
     branches:
       - master
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag to publish this build as (e.g. v9.0.2). Leave empty to only run CI.'
+        required: false
+        type: string
+      prerelease:
+        description: 'Publish the release as a pre-release'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Release runs get their own group so a push to master cannot cancel a
+  # publish that is already in flight.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.release_tag || 'ci' }}
   cancel-in-progress: true
 
 permissions:
@@ -75,3 +87,193 @@ jobs:
 
       - name: Build Release
         run: xcodebuild -project Moonlight.xcodeproj -scheme "${{ matrix.scheme }}" -configuration Release -sdk ${{ matrix.sdk }} clean build
+
+  package:
+    name: Package (${{ matrix.platform }})
+    needs: build
+    # Only runs for a manual dispatch that supplied a release tag.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag != '' }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scheme: Moonlight
+            sdk: iphoneos
+            destination: iOS
+            platform: iOS
+          - scheme: Moonlight TV
+            sdk: appletvos
+            destination: tvOS
+            platform: tvOS
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      # Device builds are unsigned on purpose: no signing identity is available
+      # on the runner, and an unsigned .ipa lets users sign it themselves with
+      # AltStore, Sideloadly, etc. The simulator runtimes downloaded by the
+      # `build` job are not needed here, the device SDKs ship with Xcode.
+      - name: Build unsigned device app (${{ matrix.platform }})
+        env:
+          SCHEME: ${{ matrix.scheme }}
+          SDK: ${{ matrix.sdk }}
+          DESTINATION: ${{ matrix.destination }}
+          PLATFORM: ${{ matrix.platform }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -eu
+
+          if ! printf '%s' "$RELEASE_TAG" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]*$'; then
+            echo "::error::Invalid release tag '$RELEASE_TAG'. Allowed: letters, digits, '.', '_' and '-'."
+            exit 1
+          fi
+
+          xcodebuild \
+            -project Moonlight.xcodeproj \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk "$SDK" \
+            -destination "generic/platform=$DESTINATION" \
+            CONFIGURATION_BUILD_DIR="$PWD/build/$PLATFORM" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            clean build
+
+      - name: Verify and package unsigned IPA (${{ matrix.platform }})
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -eu
+
+          BUILD_DIR="$PWD/build/$PLATFORM"
+          APP_PATH="$(find "$BUILD_DIR" -maxdepth 1 -type d -name '*.app' | head -n 1)"
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::No .app bundle found in $BUILD_DIR"
+            ls -la "$BUILD_DIR" || true
+            exit 1
+          fi
+          echo "App bundle: $APP_PATH"
+
+          APP_BIN_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Info.plist")"
+          APP_BIN="$APP_PATH/$APP_BIN_NAME"
+
+          echo "--- bundle info (from built Info.plist) ---"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Info.plist"
+          lipo -info "$APP_BIN"
+
+          # Make sure we really built for a device and not for the simulator,
+          # otherwise the released IPA would be unusable.
+          supported="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleSupportedPlatforms:0' "$APP_PATH/Info.plist" 2>/dev/null || echo unknown)"
+          echo "CFBundleSupportedPlatforms[0] = $supported"
+          case "$supported" in
+            iPhoneOS|AppleTVOS) : ;;
+            *) echo "::error::Expected a device build, got '$supported'."; exit 1 ;;
+          esac
+
+          if codesign -d "$APP_PATH" > /dev/null 2>&1; then
+            echo "::warning::$APP_PATH is code signed, but an unsigned build was requested."
+          else
+            echo "Confirmed: the app bundle is not code signed."
+          fi
+
+          OUT="$PWD"
+          IPA="Moonlight-${RELEASE_TAG}-${PLATFORM}-unsigned.ipa"
+          APPZIP="Moonlight-${RELEASE_TAG}-${PLATFORM}-unsigned.app.zip"
+
+          rm -rf Payload
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry "$IPA" Payload
+
+          ( cd "$(dirname "$APP_PATH")" && zip -qry "$OUT/$APPZIP" "$(basename "$APP_PATH")" )
+
+          echo "--- artifacts ---"
+          ls -lh "$IPA" "$APPZIP"
+
+      - name: Upload unsigned artifacts (${{ matrix.platform }})
+        uses: actions/upload-artifact@v7
+        with:
+          name: unsigned-${{ matrix.platform }}-${{ inputs.release_tag }}
+          path: |
+            Moonlight-*-unsigned.ipa
+            Moonlight-*-unsigned.app.zip
+          if-no-files-found: error
+          # The payload is already compressed, so storing it avoids a pointless
+          # second compression pass.
+          compression-level: 0
+
+  publish:
+    name: Publish release
+    needs: package
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download unsigned artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          PRERELEASE: ${{ inputs.prerelease }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -eu
+
+          if ! printf '%s' "$RELEASE_TAG" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]*$'; then
+            echo "::error::Invalid release tag '$RELEASE_TAG'. Allowed: letters, digits, '.', '_' and '-'."
+            exit 1
+          fi
+
+          shopt -s nullglob
+          files=(dist/*)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::No artifacts were downloaded, refusing to publish an empty release."
+            exit 1
+          fi
+          ls -lh "${files[@]}"
+
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists, uploading assets with --clobber."
+            gh release upload "$RELEASE_TAG" "${files[@]}" --clobber
+          else
+            args=(--title "$RELEASE_TAG" --target "$TARGET_SHA" --generate-notes)
+            if [ "$PRERELEASE" = "true" ]; then
+              args+=(--prerelease)
+            fi
+            gh release create "$RELEASE_TAG" "${files[@]}" "${args[@]}"
+          fi
+
+          gh release view "$RELEASE_TAG" --json tagName,isPrerelease,url \
+            --jq '"Published \(.tagName) (prerelease=\(.isPrerelease)): \(.url)"'
+
+      - name: Summarize
+        if: always()
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          {
+            echo "### Release \`$RELEASE_TAG\`"
+            echo
+            echo "| asset | size |"
+            echo "| --- | --- |"
+            for f in dist/*; do
+              [ -f "$f" ] || continue
+              echo "| \`$(basename "$f")\` | $(du -h "$f" | cut -f1) |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
