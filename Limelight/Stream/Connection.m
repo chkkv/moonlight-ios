@@ -38,6 +38,14 @@ static video_stats_t currentVideoStats;
 static video_stats_t lastVideoStats;
 static NSLock* videoStatsLock;
 
+// 诊断统计（整个会话累计，不随 1 秒窗口重置）
+static stream_error_stats_t streamErrorStats;
+static int lastSubmittedFrameNumber;
+static uint64_t lastSubmittedPresentationTimeUs;
+static BOOL hasLastSubmittedFrame;
+// 参考帧链已断裂，下一个真正提交的帧是主机的恢复帧（RFI 帧或 IDR）
+static BOOL pendingContentRegression;
+
 static SDL_AudioDeviceID audioDevice;
 static OPUS_MULTISTREAM_CONFIGURATION audioConfig;
 static void* audioBuffer;
@@ -52,6 +60,11 @@ int DrDecoderSetup(int videoFormat, int width, int height, int redrawRate, void*
     activeVideoFormat = videoFormat;
     memset(&currentVideoStats, 0, sizeof(currentVideoStats));
     memset(&lastVideoStats, 0, sizeof(lastVideoStats));
+    memset(&streamErrorStats, 0, sizeof(streamErrorStats));
+    lastSubmittedFrameNumber = 0;
+    lastSubmittedPresentationTimeUs = 0;
+    hasLastSubmittedFrame = NO;
+    pendingContentRegression = NO;
     return 0;
 }
 
@@ -78,6 +91,15 @@ void DrStop(void)
     // No stats yet
     [videoStatsLock unlock];
     return NO;
+}
+
+-(void) getStreamErrorStats:(stream_error_stats_t*)stats
+{
+    // These counters are only written on the main thread (from the display link
+    // callback), but the caller may not be, so take the lock like getVideoStats: does.
+    [videoStatsLock lock];
+    memcpy(stats, &streamErrorStats, sizeof(*stats));
+    [videoStatsLock unlock];
 }
 
 -(NSString*) getActiveCodecName
@@ -136,7 +158,31 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
     unsigned char* data = (unsigned char*) malloc(decodeUnit->fullLength);
     if (data == NULL) {
         // A frame was lost due to OOM condition
+        pendingContentRegression = YES;
         return DR_NEED_IDR;
+    }
+    
+    // 帧倒退检测：正常情况下 decode unit 严格按帧号递增从 FIFO 队列出队，
+    // 因此帧号回退/重复意味着队列乱序，PTS 非单调则会被显示层当作迟到帧丢弃。
+    if (hasLastSubmittedFrame) {
+        if (decodeUnit->frameNumber <= lastSubmittedFrameNumber) {
+            streamErrorStats.frameOrderErrors++;
+            Log(LOG_W, @"Frame order regression: frame %d submitted after frame %d",
+                decodeUnit->frameNumber, lastSubmittedFrameNumber);
+        }
+        else if (decodeUnit->presentationTimeUs <= lastSubmittedPresentationTimeUs) {
+            streamErrorStats.frameOrderErrors++;
+            Log(LOG_W, @"Non-monotonic PTS: frame %d at %llu us after %llu us",
+                decodeUnit->frameNumber,
+                (unsigned long long)decodeUnit->presentationTimeUs,
+                (unsigned long long)lastSubmittedPresentationTimeUs);
+        }
+        
+        // 帧号跳变说明网络丢了帧：下一个真正提交的帧是主机的恢复帧
+        // （RFI 失效参考帧或 IDR），它的画面内容可能来自更早的参考帧
+        if (decodeUnit->frameNumber > lastSubmittedFrameNumber + 1) {
+            pendingContentRegression = YES;
+        }
     }
     
     CFTimeInterval now = CACurrentMediaTime();
@@ -189,6 +235,10 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
                                      decodeUnit:decodeUnit];
             if (ret != DR_OK) {
                 free(data);
+                if (ret == DR_NEED_IDR) {
+                    // 参数集异常导致解码器需要重置，参考帧链已断裂
+                    pendingContentRegression = YES;
+                }
                 return ret;
             }
         }
@@ -201,10 +251,31 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
     }
 
     // This function will take our picture data buffer
-    return [renderer submitDecodeBuffer:data
-                                 length:offset
-                             bufferType:BUFFER_TYPE_PICDATA
-                             decodeUnit:decodeUnit];
+    ret = [renderer submitDecodeBuffer:data
+                                length:offset
+                            bufferType:BUFFER_TYPE_PICDATA
+                            decodeUnit:decodeUnit];
+    
+    // 记录本帧状态，供下一帧做倒退检测
+    hasLastSubmittedFrame = YES;
+    lastSubmittedFrameNumber = decodeUnit->frameNumber;
+    lastSubmittedPresentationTimeUs = decodeUnit->presentationTimeUs;
+    
+    // 内容回退计数：参考帧链断裂后第一个真正提交给解码器的恢复帧。
+    // 若恢复帧是 IDR，说明解码器拿到的是全新参考帧，不计入回退。
+    if (pendingContentRegression) {
+        if (ret == DR_OK && decodeUnit->frameType != FRAME_TYPE_IDR) {
+            streamErrorStats.contentRegressionFrames++;
+        }
+        pendingContentRegression = NO;
+    }
+    
+    if (ret == DR_NEED_IDR) {
+        // 解码器需要重置，下一个提交的帧仍然处于参考帧链断裂状态
+        pendingContentRegression = YES;
+    }
+    
+    return ret;
 }
 
 int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, void* context, int flags)

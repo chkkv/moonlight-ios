@@ -178,15 +178,20 @@
         hostProcessingString = @"";
     }
     
+    stream_error_stats_t errStats;
+    [_connection getStreamErrorStats:&errStats];
+    
     float interval = stats.endTime - stats.startTime;
-    return [NSString stringWithFormat:@"Video stream: %dx%d %.2f FPS (Codec: %@)\nFrames dropped by your network connection: %.2f%%\nAverage network latency: %@%@",
+    return [NSString stringWithFormat:@"Video stream: %dx%d %.2f FPS (Codec: %@)\nFrames dropped by your network connection: %.2f%%\nAverage network latency: %@%@\nFrame order errors: %u\nContent regression frames: %u",
             _config.width,
             _config.height,
             stats.totalFrames / interval,
             [_connection getActiveCodecName],
             stats.networkDroppedFrames / interval,
             latencyString,
-            hostProcessingString];
+            hostProcessingString,
+            (unsigned int)errStats.frameOrderErrors,
+            (unsigned int)errStats.contentRegressionFrames];
 }
 
 @end
