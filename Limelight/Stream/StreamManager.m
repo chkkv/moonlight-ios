@@ -181,8 +181,14 @@
     stream_error_stats_t errStats;
     [_connection getStreamErrorStats:&errStats];
     
+    // Compile-time stamp of the running binary. It is deliberately the first HUD
+    // line so it stays visible even if the overlay fails to grow and clips the
+    // bottom lines. CI builds in UTC, so this can be matched against the run.
+    NSString* buildStamp = [NSString stringWithFormat:@"%s %s", __DATE__, __TIME__];
+    
     float interval = stats.endTime - stats.startTime;
-    return [NSString stringWithFormat:@"Video stream: %dx%d %.2f FPS (Codec: %@)\nFrames dropped by your network connection: %.2f%%\nAverage network latency: %@%@\nFrame order errors: %u\nContent regression frames: %u",
+    return [NSString stringWithFormat:@"HUD build: %@\nVideo stream: %dx%d %.2f FPS (Codec: %@)\nFrames dropped by your network connection: %.2f%%\nAverage network latency: %@%@\nFrame order errors: %u\nContent regression frames: %u",
+            buildStamp,
             _config.width,
             _config.height,
             stats.totalFrames / interval,

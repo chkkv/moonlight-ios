@@ -288,16 +288,22 @@
     }
     
     if (text != nil) {
-        // We set our bounds to the maximum width in order to work around a bug where
-        // sizeToFit interacts badly with the UITextView's line breaks, causing the
-        // width to get smaller and smaller each time as more line breaks are inserted.
-        [_overlayView setBounds:CGRectMake(self.view.frame.origin.x,
-                                           _overlayView.frame.origin.y,
-                                           self.view.frame.size.width,
-                                           _overlayView.frame.size.height)];
+        // Lay the view out at the full width first. This preserves the original
+        // workaround for a bug where sizeToFit interacts badly with the line
+        // breaks and shrinks the width a little more on every update.
+        [_overlayView setBounds:CGRectMake(0, 0, self.view.bounds.size.width, _overlayView.bounds.size.height)];
         [_overlayView setText:text];
-        [_overlayView sizeToFit];
-        [_overlayView setCenter:CGPointMake(self.view.frame.size.width / 2, _overlayView.frame.size.height / 2)];
+        
+        // Measure the text explicitly instead of relying on sizeToFit, which has
+        // been observed to keep the previous height when the text grows. That
+        // would silently clip the last HUD lines.
+        CGSize fitted = [_overlayView sizeThatFits:CGSizeMake(self.view.bounds.size.width, CGFLOAT_MAX)];
+        CGFloat overlayHeight = fitted.height > 0
+            ? MIN(ceil(fitted.height), self.view.bounds.size.height)
+            : _overlayView.bounds.size.height;
+        
+        [_overlayView setBounds:CGRectMake(0, 0, self.view.bounds.size.width, overlayHeight)];
+        [_overlayView setCenter:CGPointMake(CGRectGetMidX(self.view.bounds), overlayHeight / 2)];
         [_overlayView setHidden:NO];
     }
     else {
