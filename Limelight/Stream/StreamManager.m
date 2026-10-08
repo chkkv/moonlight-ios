@@ -25,6 +25,10 @@
     UIView* _renderView;
     id<ConnectionCallbacks> _callbacks;
     Connection* _connection;
+
+    // Retained so the playout buffer accessors below can be answered without
+    // going through Connection's static reference to the renderer.
+    VideoDecoderRenderer* _renderer;
 }
 
 - (id) initWithConfig:(StreamConfiguration*)config renderView:(UIView*)view connectionCallbacks:(id<ConnectionCallbacks>)callbacks {
@@ -100,6 +104,8 @@
     // Initializing the renderer must be done on the main thread
     dispatch_async(dispatch_get_main_queue(), ^{
         VideoDecoderRenderer* renderer = [[VideoDecoderRenderer alloc] initWithView:self->_renderView callbacks:self->_callbacks streamAspectRatio:(float)self->_config.width / (float)self->_config.height useFramePacing:self->_config.useFramePacing];
+        renderer.bufferFrames = self->_config.bufferFrames;
+        self->_renderer = renderer;
         self->_connection = [[Connection alloc] initWithConfig:self->_config renderer:renderer connectionCallbacks:self->_callbacks];
         NSOperationQueue* opQueue = [[NSOperationQueue alloc] init];
         [opQueue addOperation:self->_connection];
@@ -189,4 +195,11 @@
             hostProcessingString];
 }
 
+- (int)pendingBufferedFrames {
+    return [_renderer pendingBufferedFrames];
+}
+
+- (int)bufferCapacity {
+    return [_renderer bufferCapacity];
+}
 @end

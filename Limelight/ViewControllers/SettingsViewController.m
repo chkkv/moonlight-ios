@@ -21,6 +21,13 @@
 @dynamic overrideUserInterfaceStyle;
 
 static NSString* bitrateFormat = @"Bitrate: %.1f Mbps";
+
+// Playout buffer depth in frames, indexed by the segmented control. Kept short
+// on purpose: beyond ~5 frames the added input latency outweighs the jitter
+// absorption for a game stream.
+static const NSInteger bufferFramesTable[] = {0, 1, 2, 3, 5};
+static const NSInteger bufferFramesTableSize = sizeof(bufferFramesTable) / sizeof(*bufferFramesTable);
+
 static const int bitrateTable[] = {
     500,
     1000,
@@ -246,6 +253,7 @@ BOOL isCustomResolution(CGSize res) {
     [self.btMouseSelector setSelectedSegmentIndex:currentSettings.btMouseSupport ? 1 : 0];
     [self.optimizeSettingsSelector setSelectedSegmentIndex:currentSettings.optimizeGames ? 1 : 0];
     [self.framePacingSelector setSelectedSegmentIndex:currentSettings.useFramePacing ? 1 : 0];
+    [self.bufferFramesSelector setSelectedSegmentIndex:[self segmentIndexForBufferFrames:currentSettings.bufferFrames]];
     [self.multiControllerSelector setSelectedSegmentIndex:currentSettings.multiController ? 1 : 0];
     [self.swapABXYButtonsSelector setSelectedSegmentIndex:currentSettings.swapABXYButtons ? 1 : 0];
     [self.audioOnPCSelector setSelectedSegmentIndex:currentSettings.playAudioOnPC ? 1 : 0];
@@ -467,6 +475,25 @@ BOOL isCustomResolution(CGSize res) {
     [self.bitrateLabel setText:[NSString stringWithFormat:bitrateFormat, _bitrate / 1000.]];
 }
 
+- (NSInteger) segmentIndexForBufferFrames:(NSInteger)frames {
+    for (NSInteger i = 0; i < bufferFramesTableSize; i++) {
+        if (bufferFramesTable[i] == frames) {
+            return i;
+        }
+    }
+    // Unknown value (or a store migrated from a version without this setting):
+    // fall back to the lowest latency option.
+    return 0;
+}
+
+- (NSInteger) getChosenBufferFrames {
+    NSInteger index = [self.bufferFramesSelector selectedSegmentIndex];
+    if (index < 0 || index >= bufferFramesTableSize) {
+        return 0;
+    }
+    return bufferFramesTable[index];
+}
+
 - (NSInteger) getChosenFrameRate {
     switch ([self.framerateSelector selectedSegmentIndex]) {
         case 0:
@@ -537,6 +564,7 @@ BOOL isCustomResolution(CGSize res) {
     BOOL useFramePacing = [self.framePacingSelector selectedSegmentIndex] == 1;
     BOOL absoluteTouchMode = [self.touchModeSelector selectedSegmentIndex] == 1;
     BOOL statsOverlay = [self.statsOverlaySelector selectedSegmentIndex] == 1;
+    NSInteger bufferFrames = [self getChosenBufferFrames];
     BOOL enableHdr = [self.hdrSelector selectedSegmentIndex] == 1;
     [dataMan saveSettingsWithBitrate:_bitrate
                            framerate:framerate
@@ -553,7 +581,8 @@ BOOL isCustomResolution(CGSize res) {
                            enableHdr:enableHdr
                       btMouseSupport:btMouseSupport
                    absoluteTouchMode:absoluteTouchMode
-                        statsOverlay:statsOverlay];
+                        statsOverlay:statsOverlay
+                        bufferFrames:bufferFrames];
 }
 
 - (void)didReceiveMemoryWarning {

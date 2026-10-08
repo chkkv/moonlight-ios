@@ -17,4 +17,7 @@
 
 - (NSString*) getStatsOverlayText;
 
+// Playout buffer occupancy and its catch-up depth.
+- (int)pendingBufferedFrames;
+- (int)bufferCapacity;
 @end

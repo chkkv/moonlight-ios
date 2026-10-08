@@ -15,9 +15,27 @@
 #include <libavformat/avio.h>
 #include <libavutil/mem.h>
 
+#include <float.h>
+
 // Private libavformat API for writing the AV1 Codec Configuration Box
 extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
                               int write_seq_header);
+
+// One frame waiting in the playout buffer. It stays compressed (the decode unit
+// owns the received packet buffers) until it is submitted, which keeps the
+// buffer cheap: a 1080p60 20 Mbps frame is ~42 KB rather than ~3 MB decoded.
+typedef struct {
+    VIDEO_FRAME_HANDLE handle;
+    PDECODE_UNIT decodeUnit;
+    double arrivalTime;
+} HeldFrame;
+
+// Room for the largest setting plus the allowed slack and a network burst.
+#define FRAME_HOLD_CAPACITY 32
+// How far beyond the target the buffer may drift before the renderer starts
+// releasing frames back to back to catch up. This is the latency budget: the
+// stream runs bufferFrames + FRAME_HOLD_SLACK frames behind at worst.
+#define FRAME_HOLD_SLACK 3
 
 @implementation VideoDecoderRenderer {
     StreamView* _view;
@@ -35,6 +53,17 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     
     CADisplayLink* _displayLink;
     BOOL framePacing;
+    
+    // Playout buffer used when bufferFrames > 0. Frames are pulled out of the
+    // common decode queue as soon as they arrive and handed to the display layer
+    // only once they have been held for bufferFrames frame periods, so a network
+    // gap does not stall the display immediately.
+    HeldFrame _heldFrames[FRAME_HOLD_CAPACITY];
+    int _heldCount;
+    // CACurrentMediaTime() - decodeUnit.receiveTimeUs/1e6. The decode unit
+    // timestamps use the platform layer's own microsecond origin, so we only need
+    // this constant to compare them with our clock.
+    double _arrivalClockOffset;
 }
 
 - (void)reinitializeDisplayLayer
@@ -87,6 +116,8 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     framePacing = useFramePacing;
     
     parameterSetBuffers = [[NSMutableArray alloc] init];
+    // Calibrated on the first frame; see pollIntoHoldBuffer.
+    _arrivalClockOffset = DBL_MAX;
     
     [self reinitializeDisplayLayer];
     
@@ -114,35 +145,161 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
 // TODO: Refactor this
 int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 
+// Submits one pulled frame to the display layer and releases the decode unit.
+- (void)submitPulledFrame:(VIDEO_FRAME_HANDLE)handle decodeUnit:(PDECODE_UNIT)du
+{
+    LiCompleteVideoFrame(handle, DrSubmitDecodeUnit(du));
+}
+
+- (void)removeHeldFrameAtIndex:(int)index
+{
+    for (int i = index; i < _heldCount - 1; i++) {
+        _heldFrames[i] = _heldFrames[i + 1];
+    }
+    _heldCount--;
+}
+
+- (void)pollIntoHoldBuffer
+{
+    VIDEO_FRAME_HANDLE handle;
+    PDECODE_UNIT du;
+    double now = CACurrentMediaTime();
+    
+    while (LiPollNextVideoFrame(&handle, &du)) {
+        // Last resort guard: a burst large enough to fill the ring is released
+        // oldest first rather than overwriting entries.
+        while (_heldCount >= FRAME_HOLD_CAPACITY) {
+            [self submitPulledFrame:_heldFrames[0].handle decodeUnit:_heldFrames[0].decodeUnit];
+            [self removeHeldFrameAtIndex:0];
+        }
+        
+        // Stamp the frame with the time its first packet arrived rather than the
+        // time we polled it. Stamping every frame of a poll with "now" would make
+        // a network burst come due all at once and get released as one dump.
+        // receiveTimeUs is on its own clock origin, so calibrate the constant
+        // offset from the tightest observation: polling always happens after
+        // arrival, so the smallest difference is the best estimate.
+        double arrival = now;
+        if (du->receiveTimeUs > 0) {
+            double packetTime = du->receiveTimeUs / 1000000.0;
+            _arrivalClockOffset = MIN(_arrivalClockOffset, now - packetTime);
+            arrival = packetTime + _arrivalClockOffset;
+            if (arrival > now) {
+                arrival = now;
+            }
+        }
+        
+        _heldFrames[_heldCount].handle = handle;
+        _heldFrames[_heldCount].decodeUnit = du;
+        _heldFrames[_heldCount].arrivalTime = arrival;
+        _heldCount++;
+    }
+}
+
+- (void)releaseDueHeldFrames
+{
+    if (_heldCount == 0) {
+        return;
+    }
+    
+    double now = CACurrentMediaTime();
+    // Wall clock rather than a tick count, so a main thread stall releases the
+    // backlog as soon as the display link runs again instead of adding the stall
+    // to the latency.
+    double holdSeconds = (double)self.bufferFrames / MAX(frameRate, 1);
+    
+    // At most one frame per display link tick. The display can only present one
+    // frame per tick, and enqueueing several at once makes the display layer -
+    // which presents by presentation timestamp - run through the late ones
+    // immediately, which looks like the stream playing fast forward.
+    if ((now - _heldFrames[0].arrivalTime) >= holdSeconds) {
+        [self submitPulledFrame:_heldFrames[0].handle decodeUnit:_heldFrames[0].decodeUnit];
+        [self removeHeldFrameAtIndex:0];
+    }
+    
+    // Latency control: if we are still further behind than the target plus the
+    // allowed slack (a burst that arrived faster than the display can present),
+    // catch up by releasing the excess back to back. Frames are never discarded,
+    // so the decoder's reference chain stays intact and no IDR is needed.
+    int excess = _heldCount - (self.bufferFrames + FRAME_HOLD_SLACK);
+    while (excess > 0 && _heldCount > 0) {
+        [self submitPulledFrame:_heldFrames[0].handle decodeUnit:_heldFrames[0].decodeUnit];
+        [self removeHeldFrameAtIndex:0];
+        excess--;
+    }
+}
+
+- (void)flushHeldFrames
+{
+    for (int i = 0; i < _heldCount; i++) {
+        LiCompleteVideoFrame(_heldFrames[i].handle, DR_OK);
+    }
+    _heldCount = 0;
+}
+
+- (int)pendingBufferedFrames
+{
+    if (self.bufferFrames > 0) {
+        return _heldCount;
+    }
+    return LiGetPendingVideoFrames();
+}
+
+- (int)bufferCapacity
+{
+    if (self.bufferFrames > 0) {
+        return self.bufferFrames + FRAME_HOLD_SLACK;
+    }
+    // The bound of the common decode unit queue.
+    return 15;
+}
+
 - (void)displayLinkCallback:(CADisplayLink *)sender
 {
     VIDEO_FRAME_HANDLE handle;
     PDECODE_UNIT du;
     
-    while (LiPollNextVideoFrame(&handle, &du)) {
-        LiCompleteVideoFrame(handle, DrSubmitDecodeUnit(du));
-        
-        if (framePacing) {
-            // Calculate the actual display refresh rate
-            double displayRefreshRate = 1 / (_displayLink.targetTimestamp - _displayLink.timestamp);
+    if (self.bufferFrames <= 0) {
+        // Lowest latency mode: submit as soon as the frame arrives. The hold
+        // buffer is not used at all, so this path is unchanged.
+        while (LiPollNextVideoFrame(&handle, &du)) {
+            [self submitPulledFrame:handle decodeUnit:du];
             
-            // Only pace frames if the display refresh rate is >= 90% of our stream frame rate.
-            // Battery saver, accessibility settings, or device thermals can cause the actual
-            // refresh rate of the display to drop below the physical maximum.
-            if (displayRefreshRate >= frameRate * 0.9f) {
-                // Keep one pending frame to smooth out gaps due to
-                // network jitter at the cost of 1 frame of latency
-                if (LiGetPendingVideoFrames() == 1) {
-                    break;
+            if (framePacing) {
+                // Calculate the actual display refresh rate
+                double displayRefreshRate = 1 / (_displayLink.targetTimestamp - _displayLink.timestamp);
+                
+                // Only pace frames if the display refresh rate is >= 90% of our stream frame rate.
+                // Battery saver, accessibility settings, or device thermals can cause the actual
+                // refresh rate of the display to drop below the physical maximum.
+                if (displayRefreshRate >= frameRate * 0.9f) {
+                    // Keep one pending frame to smooth out gaps due to
+                    // network jitter at the cost of 1 frame of latency
+                    if (LiGetPendingVideoFrames() == 1) {
+                        break;
+                    }
                 }
             }
         }
+        return;
     }
+    
+    // Buffered mode: the hold buffer replaces the frame pacing rule, so no
+    // backpressure is applied to the common queue.
+    [self pollIntoHoldBuffer];
+    [self releaseDueHeldFrames];
 }
 
 - (void)stop
 {
     [_displayLink invalidate];
+    
+    // The buffer is only touched from the display link callback, which runs on
+    // the main thread, but stop may be called from the connection thread. Hop
+    // over so we cannot race with a callback that is still in flight.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self flushHeldFrames];
+    });
 }
 
 #define NALU_START_PREFIX_SIZE 3

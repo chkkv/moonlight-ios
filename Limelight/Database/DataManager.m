@@ -67,7 +67,8 @@
                        enableHdr:(BOOL)enableHdr
                   btMouseSupport:(BOOL)btMouseSupport
                absoluteTouchMode:(BOOL)absoluteTouchMode
-                    statsOverlay:(BOOL)statsOverlay {
+                    statsOverlay:(BOOL)statsOverlay
+                    bufferFrames:(NSInteger)bufferFrames {
     
     [_managedObjectContext performBlockAndWait:^{
         Settings* settingsToSave = [self retrieveSettings];
@@ -87,6 +88,7 @@
         settingsToSave.btMouseSupport = btMouseSupport;
         settingsToSave.absoluteTouchMode = absoluteTouchMode;
         settingsToSave.statsOverlay = statsOverlay;
+        settingsToSave.bufferFrames = (int16_t)bufferFrames;
         
         [self saveData];
     }];
