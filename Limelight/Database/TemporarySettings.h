@@ -35,6 +35,10 @@
 @property (nonatomic) BOOL absoluteTouchMode;
 @property (nonatomic) BOOL statsOverlay;
 
+// Playout buffer depth in frames for the renderer's frame hold. 0 is the
+// original lowest-latency behaviour (drain the queue down to 1 frame).
+@property (nonatomic) NSInteger bufferFrames;
+
 - (id) initFromSettings:(Settings*)settings;
 
 @end

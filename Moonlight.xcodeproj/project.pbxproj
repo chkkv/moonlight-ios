@@ -197,6 +197,7 @@
 		986CCE6C2133E45300168291 /* Moonlight v1.2.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.2.xcdatamodel"; sourceTree = "<group>"; };
 		986E28A528EA989100758361 /* Moonlight v1.9.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.9.xcdatamodel"; sourceTree = "<group>"; };
 		9874E8962AE95E1D00130A3C /* Moonlight v1.10.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.10.xcdatamodel"; sourceTree = "<group>"; };
+		C0FFEE000000000000000011 /* Moonlight v1.11.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.11.xcdatamodel"; sourceTree = "<group>"; };
 		98783FEA242EAC5D00F00EF4 /* Moonlight v1.5.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.5.xcdatamodel"; sourceTree = "<group>"; };
 		98882A032AF60F5300C5A11C /* libavcodec.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libavcodec.a; path = libs/FFmpeg/lib/iOS/libavcodec.a; sourceTree = "<group>"; };
 		98882A042AF60F5300C5A11C /* libavutil.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libavutil.a; path = libs/FFmpeg/lib/iOS/libavutil.a; sourceTree = "<group>"; };
@@ -1376,6 +1377,7 @@
 		FB290D0519B2C406004C83CF /* Limelight.xcdatamodeld */ = {
 			isa = XCVersionGroup;
 			children = (
+				C0FFEE000000000000000011 /* Moonlight v1.11.xcdatamodel */,
 				9874E8962AE95E1D00130A3C /* Moonlight v1.10.xcdatamodel */,
 				986E28A528EA989100758361 /* Moonlight v1.9.xcdatamodel */,
 				984CD023288A310D0097D2D4 /* Moonlight v1.8.xcdatamodel */,
@@ -1392,7 +1394,7 @@
 				FB4678F21A51BDCB00377732 /* Limelight 0.3.0.xcdatamodel */,
 				FB290D0619B2C406004C83CF /* Limelight.xcdatamodel */,
 			);
-			currentVersion = 9874E8962AE95E1D00130A3C /* Moonlight v1.10.xcdatamodel */;
+			currentVersion = C0FFEE000000000000000011 /* Moonlight v1.11.xcdatamodel */;
 			path = Limelight.xcdatamodeld;
 			sourceTree = "<group>";
 			versionGroupType = wrapper.xcdatamodel;

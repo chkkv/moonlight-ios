@@ -43,6 +43,13 @@ static SDL_AudioDeviceID audioDevice;
 static OPUS_MULTISTREAM_CONFIGURATION audioConfig;
 static void* audioBuffer;
 static int audioFrameSize;
+// Stream frame rate, used to convert the renderer's frame based playout buffer
+// into an audio delay. Set from the config first and refreshed by DrDecoderSetup.
+static int activeFrameRate;
+// Number of decode frames worth of silence queued to offset audio playback, and
+// whether that has been done for this stream.
+static int audioPrefillFrames;
+static BOOL audioPrefillDone;
 
 static VideoDecoderRenderer* renderer;
 
@@ -51,6 +58,7 @@ int DrDecoderSetup(int videoFormat, int width, int height, int redrawRate, void*
     [renderer setupWithVideoFormat:videoFormat width:width height:height frameRate:redrawRate];
     lastFrameNumber = 0;
     activeVideoFormat = videoFormat;
+    activeFrameRate = redrawRate;
     memset(&currentVideoStats, 0, sizeof(currentVideoStats));
     memset(&lastVideoStats, 0, sizeof(lastVideoStats));
     return 0;
@@ -253,6 +261,8 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     
     audioConfig = *opusConfig;
     audioFrameSize = opusConfig->samplesPerFrame * sizeof(short) * opusConfig->channelCount;
+    audioPrefillFrames = 0;
+    audioPrefillDone = NO;
     audioBuffer = SDL_malloc(audioFrameSize);
     if (audioBuffer == NULL) {
         Log(LOG_E, @"Failed to allocate audio frame buffer");
@@ -301,9 +311,47 @@ void ArCleanup(void)
     SDL_QuitSubSystem(SDL_INIT_AUDIO);
 }
 
+// Offsets audio playback by the same amount of time the renderer holds video
+// frames, so the two stay in sync when the playout buffer is enabled. A single
+// shot of silence is enough: everything queued behind it is delayed by exactly
+// that much. Called lazily on the first decoded sample, because the audio stream
+// is initialized before the video decoder setup tells us the frame rate.
+static void applyAudioBufferOffset(void)
+{
+    audioPrefillDone = YES;
+    
+    int bufferFrames = renderer.bufferFrames;
+    if (bufferFrames <= 0 || audioFrameSize <= 0 || audioConfig.sampleRate <= 0) {
+        return;
+    }
+    
+    int rate = MAX(activeFrameRate, 1);
+    // The magnitudes here are tiny, so double arithmetic is exact.
+    int prefillSamples = (int)(((double)audioConfig.sampleRate * bufferFrames) / rate);
+    int prefillBytes = prefillSamples * (int)sizeof(short) * audioConfig.channelCount;
+    if (prefillBytes <= 0) {
+        return;
+    }
+    
+    void* silence = SDL_calloc(1, prefillBytes);
+    if (silence == NULL) {
+        return;
+    }
+    
+    if (SDL_QueueAudio(audioDevice, silence, (Uint32)prefillBytes) == 0) {
+        // Round up: the backpressure check below counts whole decode frames.
+        audioPrefillFrames = (prefillBytes / audioFrameSize) + 1;
+    }
+    SDL_free(silence);
+}
+
 void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
 {
     int decodeLen;
+    
+    if (!audioPrefillDone) {
+        applyAudioBufferOffset();
+    }
     
     // Don't queue if there's already more than 30 ms of audio data waiting
     // in Moonlight's audio queue.
@@ -315,8 +363,8 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
                                         (short*)audioBuffer, audioConfig.samplesPerFrame, 0);
     if (decodeLen > 0) {
         // Provide backpressure on the queue to ensure too many frames don't build up
-        // in SDL's audio queue.
-        while (SDL_GetQueuedAudioSize(audioDevice) / audioFrameSize > 10) {
+        // in SDL's audio queue. The silence used to offset playback counts too.
+        while (SDL_GetQueuedAudioSize(audioDevice) / audioFrameSize > 10 + audioPrefillFrames) {
             SDL_Delay(1);
         }
         
@@ -460,6 +508,8 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     _streamConfig.width = config.width;
     _streamConfig.height = config.height;
     _streamConfig.fps = config.frameRate;
+    // ArInit runs before DrDecoderSetup, so seed this from the config too.
+    activeFrameRate = config.frameRate;
     _streamConfig.bitrate = config.bitRate;
     _streamConfig.supportedVideoFormats = config.supportedVideoFormats;
     _streamConfig.audioConfiguration = config.audioConfiguration;

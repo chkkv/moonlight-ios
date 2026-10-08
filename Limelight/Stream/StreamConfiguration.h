@@ -30,6 +30,8 @@
 @property int supportedVideoFormats;
 @property BOOL multiController;
 @property BOOL useFramePacing;
+// Playout buffer depth in frames (0 = lowest latency).
+@property int bufferFrames;
 @property NSData* serverCert;
 
 @end

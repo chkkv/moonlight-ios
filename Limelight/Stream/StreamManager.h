@@ -23,4 +23,8 @@
 // stream has been set up.
 @property (nonatomic, strong, readonly) FrameStatsRecorder *frameStats;
 
+// Playout buffer occupancy and its catch-up depth, for the stats overlay.
+- (int)pendingBufferedFrames;
+- (int)bufferCapacity;
+
 @end

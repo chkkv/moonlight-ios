@@ -72,6 +72,7 @@
     FrameTimeGraphView *_frameGraphView;
     UILabel *_submitStatsLabel;
     UILabel *_submitSplitLabel;
+    UILabel *_bufferStatsLabel;
     UILabel *_stageLabel;
     UILabel *_tipLabel;
     UIActivityIndicatorView *_spinner;
@@ -355,8 +356,10 @@
         
         _submitStatsLabel = [self newHudStatsLabel];
         _submitSplitLabel = [self newHudStatsLabel];
+        _bufferStatsLabel = [self newHudStatsLabel];
         [_overlayContainer addSubview:_submitStatsLabel];
         [_overlayContainer addSubview:_submitSplitLabel];
+        [_overlayContainer addSubview:_bufferStatsLabel];
     }
 }
 
@@ -403,14 +406,16 @@
     CGFloat graphHeight = 0;
     CGFloat statsLabelHeight = 0;
     CGFloat splitLabelHeight = 0;
+    CGFloat bufferLabelHeight = 0;
     if (_frameGraphView != nil) {
         graphHeight = HUD_GRAPH_HEIGHT;
         statsLabelHeight = ceil([_submitStatsLabel.font lineHeight]);
         splitLabelHeight = ceil([_submitSplitLabel.font lineHeight]);
+        bufferLabelHeight = ceil([_bufferStatsLabel.font lineHeight]);
     }
     
     CGFloat chromeHeight = 2 * verticalPadding
-                         + (graphHeight > 0 ? graphGap + graphHeight + graphGap + statsLabelHeight + splitLabelHeight : 0);
+                         + (graphHeight > 0 ? graphGap + graphHeight + graphGap + statsLabelHeight + splitLabelHeight + bufferLabelHeight : 0);
     CGFloat maxTextHeight = bounds.size.height - safeInsets.top - safeInsets.bottom - chromeHeight;
     if (maxTextHeight > 0) {
         textHeight = MIN(textHeight, maxTextHeight);
@@ -432,6 +437,8 @@
         [_submitStatsLabel setFrame:CGRectMake(horizontalPadding, cursorY, contentWidth, statsLabelHeight)];
         cursorY += statsLabelHeight;
         [_submitSplitLabel setFrame:CGRectMake(horizontalPadding, cursorY, contentWidth, splitLabelHeight)];
+        cursorY += splitLabelHeight;
+        [_bufferStatsLabel setFrame:CGRectMake(horizontalPadding, cursorY, contentWidth, bufferLabelHeight)];
     }
 }
 
@@ -485,6 +492,24 @@
     }
     if (![_submitSplitLabel.text isEqualToString:splitText]) {
         [_submitSplitLabel setText:splitText];
+    }
+    
+    // Playout buffer / decode queue occupancy. This is the metric that shows
+    // whether a Wi-Fi gap is being absorbed or is overflowing.
+    NSString* bufferText;
+    if (_streamConfig.bufferFrames > 0) {
+        bufferText = [NSString stringWithFormat:@"Buffer: %d/%d frames held (target %d)",
+                      [_streamMan pendingBufferedFrames],
+                      [_streamMan bufferCapacity],
+                      _streamConfig.bufferFrames];
+    }
+    else {
+        bufferText = [NSString stringWithFormat:@"Queue: %d/%d (low latency mode)",
+                      [_streamMan pendingBufferedFrames],
+                      [_streamMan bufferCapacity]];
+    }
+    if (![_bufferStatsLabel.text isEqualToString:bufferText]) {
+        [_bufferStatsLabel setText:bufferText];
     }
 }
 
