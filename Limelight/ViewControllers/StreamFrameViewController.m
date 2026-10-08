@@ -12,10 +12,13 @@
 #import "StreamManager.h"
 #import "ControllerSupport.h"
 #import "DataManager.h"
+#import "FrameStatsRecorder.h"
+#import "FrameTimeGraphView.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <QuartzCore/QuartzCore.h>
 #include <Limelight.h>
 
 #if TARGET_OS_TV
@@ -30,16 +33,45 @@
 - (id)initWithRefreshRate:(float)arg1 videoDynamicRange:(int)arg2;
 @end
 
+// Stats overlay frame time graph. The graph refreshes at 20 Hz; the numbers
+// under it only every 4th tick (5 Hz) so they stay readable and CoreText layout
+// stays off most frames.
+#define HUD_GRAPH_WINDOW_SECONDS 1.0
+#define HUD_GRAPH_REFRESH_INTERVAL 0.05
+#define HUD_GRAPH_LABEL_TICK_DIVISOR 4
+#if TARGET_OS_TV
+#define HUD_GRAPH_HEIGHT 140.0
+#else
+#define HUD_GRAPH_HEIGHT 72.0
+#endif
+
+@interface StreamFrameViewController ()
+
+- (void)ensureOverlayViews:(BOOL)withGraph;
+- (void)layoutOverlayContainer;
+- (UILabel*)newHudStatsLabel;
+- (void)updateOverlayText:(NSString*)text;
+- (void)updateSubmitLabels:(FrameWindowStats)stats;
+- (void)updateFrameGraph:(NSTimer*)timer;
+
+@end
+
 @implementation StreamFrameViewController {
     ControllerSupport *_controllerSupport;
     StreamManager *_streamMan;
     TemporarySettings *_settings;
     NSTimer *_inactivityTimer;
     NSTimer *_statsUpdateTimer;
+    NSTimer *_frameGraphTimer;
+    NSUInteger _frameGraphTick;
     UITapGestureRecognizer *_menuTapGestureRecognizer;
     UITapGestureRecognizer *_menuDoubleTapGestureRecognizer;
     UITapGestureRecognizer *_playPauseTapGestureRecognizer;
+    UIView *_overlayContainer;
     UITextView *_overlayView;
+    FrameTimeGraphView *_frameGraphView;
+    UILabel *_submitStatsLabel;
+    UILabel *_submitSplitLabel;
     UILabel *_stageLabel;
     UILabel *_tipLabel;
     UIActivityIndicatorView *_spinner;
@@ -253,6 +285,13 @@
 }
 #endif
 
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    
+    // Keep the HUD inside the safe area across rotations.
+    [self layoutOverlayContainer];
+}
+
 - (void)updateStatsOverlay {
     NSString* overlayText = [self->_streamMan getStatsOverlayText];
     
@@ -261,8 +300,34 @@
     });
 }
 
-- (void)updateOverlayText:(NSString*)text {
-    if (_overlayView == nil) {
+- (UILabel*)newHudStatsLabel {
+    UILabel* label = [[UILabel alloc] init];
+    [label setTextColor:[UIColor lightGrayColor]];
+    [label setNumberOfLines:1];
+    [label setAdjustsFontSizeToFitWidth:YES];
+    [label setMinimumScaleFactor:0.7];
+    [label setLineBreakMode:NSLineBreakByClipping];
+    [label setText:@""];
+#if TARGET_OS_TV
+    [label setFont:[UIFont monospacedDigitSystemFontOfSize:18 weight:UIFontWeightRegular]];
+#else
+    [label setFont:[UIFont monospacedDigitSystemFontOfSize:10 weight:UIFontWeightRegular]];
+#endif
+    return label;
+}
+
+// Builds the HUD views once. The frame time graph is only added when the stats
+// overlay is enabled; the same container is reused for the connection warning
+// text when it is not.
+- (void)ensureOverlayViews:(BOOL)withGraph {
+    if (_overlayContainer == nil) {
+        _overlayContainer = [[UIView alloc] init];
+        [_overlayContainer setBackgroundColor:[UIColor blackColor]];
+        [_overlayContainer setAlpha:0.5];
+        [_overlayContainer setUserInteractionEnabled:NO];
+        [_overlayContainer setHidden:YES];
+        [self.view addSubview:_overlayContainer];
+        
         _overlayView = [[UITextView alloc] init];
 #if !TARGET_OS_TV
         [_overlayView setEditable:NO];
@@ -270,39 +335,188 @@
         [_overlayView setUserInteractionEnabled:NO];
         [_overlayView setSelectable:NO];
         [_overlayView setScrollEnabled:NO];
-        
-        // HACK: If not using stats overlay, center the text
-        if (_statsUpdateTimer == nil) {
-            [_overlayView setTextAlignment:NSTextAlignmentCenter];
-        }
-        
+        [_overlayView setBackgroundColor:[UIColor clearColor]];
         [_overlayView setTextColor:[UIColor lightGrayColor]];
-        [_overlayView setBackgroundColor:[UIColor blackColor]];
 #if TARGET_OS_TV
         [_overlayView setFont:[UIFont systemFontOfSize:24]];
 #else
         [_overlayView setFont:[UIFont systemFontOfSize:12]];
 #endif
-        [_overlayView setAlpha:0.5];
-        [self.view addSubview:_overlayView];
+        [_overlayContainer addSubview:_overlayView];
     }
     
+    if (withGraph && _frameGraphView == nil) {
+        _frameGraphView = [[FrameTimeGraphView alloc] initWithFrame:CGRectZero];
+        [_frameGraphView setWindowSeconds:HUD_GRAPH_WINDOW_SECONDS];
+        // Per-frame budget of the stream we actually negotiated with the host.
+        double streamFrameRate = MAX((double)_streamConfig.frameRate, 1.0);
+        [_frameGraphView setBudgetMs:1000.0 / streamFrameRate];
+        [_overlayContainer addSubview:_frameGraphView];
+        
+        _submitStatsLabel = [self newHudStatsLabel];
+        _submitSplitLabel = [self newHudStatsLabel];
+        [_overlayContainer addSubview:_submitStatsLabel];
+        [_overlayContainer addSubview:_submitSplitLabel];
+    }
+}
+
+- (void)layoutOverlayContainer {
+    if (_overlayContainer == nil) {
+        return;
+    }
+    
+    CGRect bounds = self.view.bounds;
+    UIEdgeInsets safeInsets = UIEdgeInsetsZero;
+    if (@available(iOS 11.0, tvOS 11.0, *)) {
+        safeInsets = self.view.safeAreaInsets;
+    }
+    
+#if TARGET_OS_TV
+    CGFloat horizontalPadding = 16.0;
+    CGFloat verticalPadding = 12.0;
+    CGFloat graphGap = 10.0;
+    CGFloat maxWidth = 900.0;
+#else
+    CGFloat horizontalPadding = 8.0;
+    CGFloat verticalPadding = 6.0;
+    CGFloat graphGap = 6.0;
+    CGFloat maxWidth = 420.0;
+#endif
+    CGFloat screenMargin = 8.0;
+    
+    CGFloat availableWidth = bounds.size.width - safeInsets.left - safeInsets.right - 2 * screenMargin;
+    CGFloat width = MIN(maxWidth, availableWidth);
+    if (width < 1.0) {
+        return;
+    }
+    CGFloat contentWidth = width - 2 * horizontalPadding;
+    if (contentWidth < 1.0) {
+        return;
+    }
+    
+    // Measure the text explicitly instead of relying on sizeToFit, which has
+    // been observed to keep returning the previous height when the text grows.
+    // That silently clipped the last HUD lines.
+    CGSize textSize = [_overlayView sizeThatFits:CGSizeMake(contentWidth, CGFLOAT_MAX)];
+    CGFloat textHeight = ceil(textSize.height);
+    
+    CGFloat graphHeight = 0;
+    CGFloat statsLabelHeight = 0;
+    CGFloat splitLabelHeight = 0;
+    if (_frameGraphView != nil) {
+        graphHeight = HUD_GRAPH_HEIGHT;
+        statsLabelHeight = ceil([_submitStatsLabel.font lineHeight]);
+        splitLabelHeight = ceil([_submitSplitLabel.font lineHeight]);
+    }
+    
+    CGFloat chromeHeight = 2 * verticalPadding
+                         + (graphHeight > 0 ? graphGap + graphHeight + graphGap + statsLabelHeight + splitLabelHeight : 0);
+    CGFloat maxTextHeight = bounds.size.height - safeInsets.top - safeInsets.bottom - chromeHeight;
+    if (maxTextHeight > 0) {
+        textHeight = MIN(textHeight, maxTextHeight);
+    }
+    
+    CGFloat height = textHeight + chromeHeight;
+    CGFloat x = safeInsets.left + screenMargin + MAX((availableWidth - width) / 2.0, 0.0);
+    CGFloat y = safeInsets.top + verticalPadding;
+    [_overlayContainer setFrame:CGRectMake(x, y, width, height)];
+    
+    CGFloat cursorY = verticalPadding;
+    [_overlayView setFrame:CGRectMake(horizontalPadding, cursorY, contentWidth, textHeight)];
+    cursorY += textHeight;
+    
+    if (_frameGraphView != nil) {
+        cursorY += graphGap;
+        [_frameGraphView setFrame:CGRectMake(horizontalPadding, cursorY, contentWidth, graphHeight)];
+        cursorY += graphHeight + graphGap;
+        [_submitStatsLabel setFrame:CGRectMake(horizontalPadding, cursorY, contentWidth, statsLabelHeight)];
+        cursorY += statsLabelHeight;
+        [_submitSplitLabel setFrame:CGRectMake(horizontalPadding, cursorY, contentWidth, splitLabelHeight)];
+    }
+}
+
+- (void)updateOverlayText:(NSString*)text {
+    // The graph only exists when the stats overlay is enabled.
+    BOOL withGraph = (_statsUpdateTimer != nil);
+    [self ensureOverlayViews:withGraph];
+    
+    // When this view is used for the connection warnings, center the text like
+    // the original HUD did.
+    [_overlayView setTextAlignment:withGraph ? NSTextAlignmentLeft : NSTextAlignmentCenter];
+    
     if (text != nil) {
-        // We set our bounds to the maximum width in order to work around a bug where
-        // sizeToFit interacts badly with the UITextView's line breaks, causing the
-        // width to get smaller and smaller each time as more line breaks are inserted.
-        [_overlayView setBounds:CGRectMake(self.view.frame.origin.x,
-                                           _overlayView.frame.origin.y,
-                                           self.view.frame.size.width,
-                                           _overlayView.frame.size.height)];
         [_overlayView setText:text];
-        [_overlayView sizeToFit];
-        [_overlayView setCenter:CGPointMake(self.view.frame.size.width / 2, _overlayView.frame.size.height / 2)];
-        [_overlayView setHidden:NO];
+    }
+    
+    [self layoutOverlayContainer];
+    
+    if (withGraph) {
+        // Do not wait for the next tick to fill the graph in.
+        [self updateFrameGraph:nil];
+    }
+    
+    [_overlayContainer setHidden:(text == nil && !withGraph)];
+}
+
+- (void)updateSubmitLabels:(FrameWindowStats)stats {
+    NSString* statsText;
+    NSString* splitText;
+    
+    if (stats.count == 0) {
+        statsText = @"Submit: -- FPS | Frame: -- ms";
+        splitText = @"Split: prepare -- ms | enqueue -- ms";
     }
     else {
-        [_overlayView setHidden:YES];
+        statsText = [NSString stringWithFormat:@"Submit: %.1f FPS | Frame: avg %.2f ms | max %.2f ms | p99 %.2f ms",
+                     stats.fps,
+                     stats.totalAvgUs / 1000.0,
+                     stats.totalMaxUs / 1000.0,
+                     stats.totalP99Us / 1000.0];
+        splitText = [NSString stringWithFormat:@"Split: prepare %.2f ms | enqueue %.2f ms | window %.1f s",
+                     stats.prepareAvgUs / 1000.0,
+                     stats.enqueueAvgUs / 1000.0,
+                     HUD_GRAPH_WINDOW_SECONDS];
     }
+    
+    // Only touch the labels when the value actually changed: an unconditional
+    // setText would re-run CoreText layout on every tick.
+    if (![_submitStatsLabel.text isEqualToString:statsText]) {
+        [_submitStatsLabel setText:statsText];
+    }
+    if (![_submitSplitLabel.text isEqualToString:splitText]) {
+        [_submitSplitLabel setText:splitText];
+    }
+}
+
+- (void)updateFrameGraph:(NSTimer*)timer {
+    if (_frameGraphView == nil) {
+        return;
+    }
+    
+    FrameStatsRecorder* recorder = _streamMan.frameStats;
+    if (recorder == nil) {
+        [_frameGraphView clear];
+        return;
+    }
+    
+    double now = CACurrentMediaTime();
+    FrameSample samples[FRAME_STATS_CAPACITY];
+    NSUInteger count = [recorder copySamplesInto:samples
+                                        maxCount:FRAME_STATS_CAPACITY
+                                             now:now
+                                          window:HUD_GRAPH_WINDOW_SECONDS];
+    [_frameGraphView updateWithSamples:samples count:count now:now];
+    
+    // The trace runs at 20 Hz so spikes are not missed, but the numbers below it
+    // are far easier to read at 5 Hz.
+    if (timer != nil) {
+        _frameGraphTick++;
+        if ((_frameGraphTick % HUD_GRAPH_LABEL_TICK_DIVISOR) != 0) {
+            return;
+        }
+    }
+    
+    [self updateSubmitLabels:[recorder statsAtTime:now window:HUD_GRAPH_WINDOW_SECONDS]];
 }
 
 - (void) returnToMainFrame {
@@ -311,6 +525,12 @@
     
     [_statsUpdateTimer invalidate];
     _statsUpdateTimer = nil;
+    
+    // The graph timer must not survive the stream: a 20 Hz wake up with no
+    // consumer would just burn power.
+    [_frameGraphTimer invalidate];
+    _frameGraphTimer = nil;
+    [_frameGraphView clear];
     
     [self.navigationController popToRootViewControllerAnimated:YES];
 }
@@ -385,6 +605,24 @@
                                                                      selector:@selector(updateStatsOverlay)
                                                                      userInfo:nil
                                                                       repeats:YES];
+            
+            // The graph is driven by an NSTimer, deliberately not by a second
+            // CADisplayLink: a display link participates in ProMotion refresh
+            // rate negotiation and could pull the display away from the rate
+            // the video display link pinned (see VideoDecoderRenderer).
+            self->_frameGraphTimer = [NSTimer scheduledTimerWithTimeInterval:HUD_GRAPH_REFRESH_INTERVAL
+                                                                      target:self
+                                                                    selector:@selector(updateFrameGraph:)
+                                                                    userInfo:nil
+                                                                     repeats:YES];
+            [self->_frameGraphTimer setTolerance:HUD_GRAPH_REFRESH_INTERVAL / 2.0];
+            
+            // Create the HUD now so the trace is live from the first frames
+            // instead of waiting for the 1 second text refresh.
+            [self ensureOverlayViews:YES];
+            [self layoutOverlayContainer];
+            [self updateFrameGraph:nil];
+            [self->_overlayContainer setHidden:NO];
         }
     });
 }

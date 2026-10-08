@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C0FFEE0000000000000000B1 /* FrameStatsRecorder.m in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000002 /* FrameStatsRecorder.m */; };
+		C0FFEE0000000000000000B2 /* FrameStatsRecorder.m in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000002 /* FrameStatsRecorder.m */; };
+		C0FFEE0000000000000000B3 /* FrameTimeGraphView.m in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000004 /* FrameTimeGraphView.m */; };
+		C0FFEE0000000000000000B4 /* FrameTimeGraphView.m in Sources */ = {isa = PBXBuildFile; fileRef = C0FFEE000000000000000004 /* FrameTimeGraphView.m */; };
 		693B3A9B218638CD00982F7B /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 693B3A9A218638CD00982F7B /* Settings.bundle */; };
 		98181BE92791277400E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BE82791275D00E43572 /* libSDL2.a */; };
 		98181BEB2791278F00E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BEA2791278300E43572 /* libSDL2.a */; };
@@ -281,12 +285,16 @@
 		FB89461B19F646E200339C8A /* StreamManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = StreamManager.m; sourceTree = "<group>"; };
 		FB89461C19F646E200339C8A /* VideoDecoderRenderer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = VideoDecoderRenderer.h; sourceTree = "<group>"; };
 		FB89461D19F646E200339C8A /* VideoDecoderRenderer.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = VideoDecoderRenderer.m; sourceTree = "<group>"; };
+		C0FFEE000000000000000001 /* FrameStatsRecorder.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = FrameStatsRecorder.h; sourceTree = "<group>"; };
+		C0FFEE000000000000000002 /* FrameStatsRecorder.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = FrameStatsRecorder.m; sourceTree = "<group>"; };
 		FB89462119F646E200339C8A /* Utils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Utils.h; sourceTree = "<group>"; };
 		FB89462219F646E200339C8A /* Utils.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = Utils.m; sourceTree = "<group>"; };
 		FB89462419F646E200339C8A /* MainFrameViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MainFrameViewController.h; sourceTree = "<group>"; };
 		FB89462519F646E200339C8A /* MainFrameViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MainFrameViewController.m; sourceTree = "<group>"; };
 		FB89462619F646E200339C8A /* StreamFrameViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = StreamFrameViewController.h; sourceTree = "<group>"; };
 		FB89462719F646E200339C8A /* StreamFrameViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = StreamFrameViewController.m; sourceTree = "<group>"; };
+		C0FFEE000000000000000003 /* FrameTimeGraphView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = FrameTimeGraphView.h; sourceTree = "<group>"; };
+		C0FFEE000000000000000004 /* FrameTimeGraphView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = FrameTimeGraphView.m; sourceTree = "<group>"; };
 		FB89463719F6473800339C8A /* Launch Screen.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = "Launch Screen.xib"; sourceTree = SOURCE_ROOT; };
 		FB8946E519F6AFB800339C8A /* opus.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus.h; sourceTree = "<group>"; };
 		FB8946E619F6AFB800339C8A /* opus_defines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus_defines.h; sourceTree = "<group>"; };
@@ -550,6 +558,8 @@
 				FB89461B19F646E200339C8A /* StreamManager.m */,
 				FB89461C19F646E200339C8A /* VideoDecoderRenderer.h */,
 				FB89461D19F646E200339C8A /* VideoDecoderRenderer.m */,
+				C0FFEE000000000000000001 /* FrameStatsRecorder.h */,
+				C0FFEE000000000000000002 /* FrameStatsRecorder.m */,
 				9803CCAB254F9EAF00EE185E /* ConnectionCallbacks.h */,
 			);
 			path = Stream;
@@ -575,6 +585,8 @@
 				FB89462519F646E200339C8A /* MainFrameViewController.m */,
 				FB89462619F646E200339C8A /* StreamFrameViewController.h */,
 				FB89462719F646E200339C8A /* StreamFrameViewController.m */,
+				C0FFEE000000000000000003 /* FrameTimeGraphView.h */,
+				C0FFEE000000000000000004 /* FrameTimeGraphView.m */,
 				FBD3494E19FF2174002D2A60 /* SettingsViewController.h */,
 				FBD3494F19FF2174002D2A60 /* SettingsViewController.m */,
 				FB4A23B61A9D3637004D2EF2 /* LoadingFrameViewController.h */,
@@ -878,6 +890,8 @@
 				FB1A67A7213245BD00507771 /* StreamManager.m in Sources */,
 				FB1A67A9213245BD00507771 /* VideoDecoderRenderer.m in Sources */,
 				FB1A67A12132458C00507771 /* main.m in Sources */,
+				C0FFEE0000000000000000B2 /* FrameStatsRecorder.m in Sources */,
+				C0FFEE0000000000000000B4 /* FrameTimeGraphView.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -934,6 +948,8 @@
 				FB9AFD3A1A7E05CE00872C98 /* ServerInfoResponse.m in Sources */,
 				FB89463119F646E200339C8A /* StreamManager.m in Sources */,
 				988FCD41293B091B003050E2 /* KeyboardInputField.m in Sources */,
+				C0FFEE0000000000000000B1 /* FrameStatsRecorder.m in Sources */,
+				C0FFEE0000000000000000B3 /* FrameTimeGraphView.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

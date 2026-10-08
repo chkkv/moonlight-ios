@@ -35,7 +35,11 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     
     CADisplayLink* _displayLink;
     BOOL framePacing;
+    
+    FrameStatsRecorder *_frameStats;
 }
+
+@synthesize frameStats = _frameStats;
 
 - (void)reinitializeDisplayLayer
 {
@@ -87,6 +91,7 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     framePacing = useFramePacing;
     
     parameterSetBuffers = [[NSMutableArray alloc] init];
+    _frameStats = [[FrameStatsRecorder alloc] init];
     
     [self reinitializeDisplayLayer];
     
@@ -97,6 +102,9 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
 {
     self->videoFormat = videoFormat;
     self->frameRate = frameRate;
+    
+    // A new stream starts here: drop the previous session's trace.
+    [_frameStats reset];
 }
 
 - (void)start
@@ -112,7 +120,7 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
 }
 
 // TODO: Refactor this
-int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
+int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit, FrameTiming *timing);
 
 - (void)displayLinkCallback:(CADisplayLink *)sender
 {
@@ -120,7 +128,15 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     PDECODE_UNIT du;
     
     while (LiPollNextVideoFrame(&handle, &du)) {
-        LiCompleteVideoFrame(handle, DrSubmitDecodeUnit(du));
+        // Probe 3 of 3: total wall clock for the frame. DrSubmitDecodeUnit()
+        // fills in the prepare/enqueue split from the inside.
+        double submitStart = CACurrentMediaTime();
+        FrameTiming timing = {0};
+        int ret = DrSubmitDecodeUnit(du, &timing);
+        timing.totalUs = (uint32_t)((CACurrentMediaTime() - submitStart) * 1000000.0);
+        [_frameStats recordTiming:timing atTime:submitStart];
+        
+        LiCompleteVideoFrame(handle, ret);
         
         if (framePacing) {
             // Calculate the actual display refresh rate

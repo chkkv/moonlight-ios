@@ -7,6 +7,7 @@
 //
 
 #import "Connection.h"
+#import "FrameStatsRecorder.h"
 #import "Utils.h"
 
 #import <VideoToolbox/VideoToolbox.h>
@@ -129,10 +130,11 @@ void DrStop(void)
     }
 }
 
-int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
+int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit, FrameTiming *timing)
 {
     int offset = 0;
     int ret;
+    double probeStart = CACurrentMediaTime();
     unsigned char* data = (unsigned char*) malloc(decodeUnit->fullLength);
     if (data == NULL) {
         // A frame was lost due to OOM condition
@@ -189,6 +191,11 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
                                      decodeUnit:decodeUnit];
             if (ret != DR_OK) {
                 free(data);
+                // Attribute the work done so far so this frame does not show up
+                // as a zero-cost sample.
+                if (timing != NULL) {
+                    timing->prepareUs = (uint32_t)((CACurrentMediaTime() - probeStart) * 1000000.0);
+                }
                 return ret;
             }
         }
@@ -200,11 +207,25 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
         entry = entry->next;
     }
 
+    // Probe 1 of 3: everything Connection does to prepare the frame, which
+    // includes the full-frame memcpy above and any parameter set submission.
+    if (timing != NULL) {
+        timing->prepareUs = (uint32_t)((CACurrentMediaTime() - probeStart) * 1000000.0);
+    }
+    
+    // Probe 2 of 3: the renderer's format description / CMBlockBuffer assembly
+    // and the enqueue on the display layer.
+    double enqueueStart = CACurrentMediaTime();
     // This function will take our picture data buffer
-    return [renderer submitDecodeBuffer:data
-                                 length:offset
-                             bufferType:BUFFER_TYPE_PICDATA
-                             decodeUnit:decodeUnit];
+    ret = [renderer submitDecodeBuffer:data
+                                length:offset
+                            bufferType:BUFFER_TYPE_PICDATA
+                            decodeUnit:decodeUnit];
+    if (timing != NULL) {
+        timing->enqueueUs = (uint32_t)((CACurrentMediaTime() - enqueueStart) * 1000000.0);
+    }
+    
+    return ret;
 }
 
 int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, void* context, int flags)

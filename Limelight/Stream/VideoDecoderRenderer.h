@@ -9,10 +9,15 @@
 @import AVFoundation;
 
 #import "ConnectionCallbacks.h"
+#import "FrameStatsRecorder.h"
 
 #include "Limelight.h"
 
 @interface VideoDecoderRenderer : NSObject
+
+// Rolling per-frame submission timing for the stats overlay graph. Written on
+// the main thread from displayLinkCallback:.
+@property (nonatomic, strong, readonly) FrameStatsRecorder *frameStats;
 
 - (id)initWithView:(UIView*)view callbacks:(id<ConnectionCallbacks>)callbacks streamAspectRatio:(float)aspectRatio useFramePacing:(BOOL)useFramePacing;
 

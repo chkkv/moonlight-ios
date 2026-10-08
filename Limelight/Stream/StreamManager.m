@@ -25,6 +25,9 @@
     UIView* _renderView;
     id<ConnectionCallbacks> _callbacks;
     Connection* _connection;
+    // Retained so the stats overlay can read its timing recorder. The renderer
+    // would otherwise only be kept alive by Connection's static reference.
+    VideoDecoderRenderer* _renderer;
 }
 
 - (id) initWithConfig:(StreamConfiguration*)config renderView:(UIView*)view connectionCallbacks:(id<ConnectionCallbacks>)callbacks {
@@ -100,6 +103,7 @@
     // Initializing the renderer must be done on the main thread
     dispatch_async(dispatch_get_main_queue(), ^{
         VideoDecoderRenderer* renderer = [[VideoDecoderRenderer alloc] initWithView:self->_renderView callbacks:self->_callbacks streamAspectRatio:(float)self->_config.width / (float)self->_config.height useFramePacing:self->_config.useFramePacing];
+        self->_renderer = renderer;
         self->_connection = [[Connection alloc] initWithConfig:self->_config renderer:renderer connectionCallbacks:self->_callbacks];
         NSOperationQueue* opQueue = [[NSOperationQueue alloc] init];
         [opQueue addOperation:self->_connection];
@@ -187,6 +191,10 @@
             stats.networkDroppedFrames / interval,
             latencyString,
             hostProcessingString];
+}
+
+- (FrameStatsRecorder*)frameStats {
+    return _renderer.frameStats;
 }
 
 @end
