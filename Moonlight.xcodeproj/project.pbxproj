@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CA5E000000000000000000B1 /* CustomLayoutDocument.m in Sources */ = {isa = PBXBuildFile; fileRef = CA5E00000000000000000002 /* CustomLayoutDocument.m */; };
+		CA5E000000000000000000B2 /* CustomLayoutDocument.m in Sources */ = {isa = PBXBuildFile; fileRef = CA5E00000000000000000002 /* CustomLayoutDocument.m */; };
+		CA5E000000000000000000B3 /* CustomControlsView.m in Sources */ = {isa = PBXBuildFile; fileRef = CA5E00000000000000000004 /* CustomControlsView.m */; };
+		CA5E000000000000000000B4 /* TemporaryCustomLayout.m in Sources */ = {isa = PBXBuildFile; fileRef = CA5E00000000000000000006 /* TemporaryCustomLayout.m */; };
+		CA5E000000000000000000B5 /* TemporaryCustomLayout.m in Sources */ = {isa = PBXBuildFile; fileRef = CA5E00000000000000000006 /* TemporaryCustomLayout.m */; };
+		CA5E000000000000000000B6 /* CustomLayoutListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = CA5E00000000000000000008 /* CustomLayoutListViewController.m */; };
+		CA5E000000000000000000B7 /* CustomControlsEditorViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = CA5E0000000000000000000A /* CustomControlsEditorViewController.m */; };
 		693B3A9B218638CD00982F7B /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 693B3A9A218638CD00982F7B /* Settings.bundle */; };
 		98181BE92791277400E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BE82791275D00E43572 /* libSDL2.a */; };
 		98181BEB2791278F00E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BEA2791278300E43572 /* libSDL2.a */; };
@@ -193,6 +200,7 @@
 		986CCE6C2133E45300168291 /* Moonlight v1.2.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.2.xcdatamodel"; sourceTree = "<group>"; };
 		986E28A528EA989100758361 /* Moonlight v1.9.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.9.xcdatamodel"; sourceTree = "<group>"; };
 		9874E8962AE95E1D00130A3C /* Moonlight v1.10.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.10.xcdatamodel"; sourceTree = "<group>"; };
+		C0FFEE000000000000000012 /* Moonlight v1.12.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.12.xcdatamodel"; sourceTree = "<group>"; };
 		C0FFEE000000000000000011 /* Moonlight v1.11.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.11.xcdatamodel"; sourceTree = "<group>"; };
 		98783FEA242EAC5D00F00EF4 /* Moonlight v1.5.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.5.xcdatamodel"; sourceTree = "<group>"; };
 		98882A032AF60F5300C5A11C /* libavcodec.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libavcodec.a; path = libs/FFmpeg/lib/iOS/libavcodec.a; sourceTree = "<group>"; };
@@ -213,6 +221,8 @@
 		98D5856C1C0EA79600F6CC00 /* TemporaryHost.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = TemporaryHost.m; path = Database/TemporaryHost.m; sourceTree = "<group>"; };
 		98D5856E1C0ED0E800F6CC00 /* TemporarySettings.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = TemporarySettings.h; path = Database/TemporarySettings.h; sourceTree = "<group>"; };
 		98D5856F1C0ED0E800F6CC00 /* TemporarySettings.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = TemporarySettings.m; path = Database/TemporarySettings.m; sourceTree = "<group>"; };
+		CA5E00000000000000000005 /* TemporaryCustomLayout.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = TemporaryCustomLayout.h; path = Database/TemporaryCustomLayout.h; sourceTree = "<group>"; };
+		CA5E00000000000000000006 /* TemporaryCustomLayout.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = TemporaryCustomLayout.m; path = Database/TemporaryCustomLayout.m; sourceTree = "<group>"; };
 		D4746EEA1CBC740C006FB401 /* Moonlight-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Moonlight-Bridging-Header.h"; path = "Input/Moonlight-Bridging-Header.h"; sourceTree = "<group>"; };
 		DC1F5A05206436B10037755F /* ConnectionHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ConnectionHelper.h; sourceTree = "<group>"; };
 		DC1F5A06206436B20037755F /* ConnectionHelper.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ConnectionHelper.m; sourceTree = "<group>"; };
@@ -246,6 +256,10 @@
 		FB290E7A19B38036004C83CF /* iPhone.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; path = iPhone.storyboard; sourceTree = SOURCE_ROOT; };
 		FB4678EB1A50C40900377732 /* OnScreenControls.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OnScreenControls.h; sourceTree = "<group>"; };
 		FB4678EC1A50C40900377732 /* OnScreenControls.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OnScreenControls.m; sourceTree = "<group>"; };
+		CA5E00000000000000000001 /* CustomLayoutDocument.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CustomLayoutDocument.h; sourceTree = "<group>"; };
+		CA5E00000000000000000002 /* CustomLayoutDocument.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = CustomLayoutDocument.m; sourceTree = "<group>"; };
+		CA5E00000000000000000003 /* CustomControlsView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CustomControlsView.h; sourceTree = "<group>"; };
+		CA5E00000000000000000004 /* CustomControlsView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = CustomControlsView.m; sourceTree = "<group>"; };
 		FB4678F21A51BDCB00377732 /* Limelight 0.3.0.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Limelight 0.3.0.xcdatamodel"; sourceTree = "<group>"; };
 		FB4678F81A55FFAD00377732 /* DiscoveryManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DiscoveryManager.h; sourceTree = "<group>"; };
 		FB4678F91A55FFAD00377732 /* DiscoveryManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DiscoveryManager.m; sourceTree = "<group>"; };
@@ -288,6 +302,10 @@
 		FB89462519F646E200339C8A /* MainFrameViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MainFrameViewController.m; sourceTree = "<group>"; };
 		FB89462619F646E200339C8A /* StreamFrameViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = StreamFrameViewController.h; sourceTree = "<group>"; };
 		FB89462719F646E200339C8A /* StreamFrameViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = StreamFrameViewController.m; sourceTree = "<group>"; };
+		CA5E00000000000000000007 /* CustomLayoutListViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CustomLayoutListViewController.h; sourceTree = "<group>"; };
+		CA5E00000000000000000008 /* CustomLayoutListViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = CustomLayoutListViewController.m; sourceTree = "<group>"; };
+		CA5E00000000000000000009 /* CustomControlsEditorViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CustomControlsEditorViewController.h; sourceTree = "<group>"; };
+		CA5E0000000000000000000A /* CustomControlsEditorViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = CustomControlsEditorViewController.m; sourceTree = "<group>"; };
 		FB89463719F6473800339C8A /* Launch Screen.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = "Launch Screen.xib"; sourceTree = SOURCE_ROOT; };
 		FB8946E519F6AFB800339C8A /* opus.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus.h; sourceTree = "<group>"; };
 		FB8946E619F6AFB800339C8A /* opus_defines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus_defines.h; sourceTree = "<group>"; };
@@ -508,6 +526,10 @@
 				FB89460D19F646E200339C8A /* StreamView.m */,
 				FB4678EB1A50C40900377732 /* OnScreenControls.h */,
 				FB4678EC1A50C40900377732 /* OnScreenControls.m */,
+				CA5E00000000000000000001 /* CustomLayoutDocument.h */,
+				CA5E00000000000000000002 /* CustomLayoutDocument.m */,
+				CA5E00000000000000000003 /* CustomControlsView.h */,
+				CA5E00000000000000000004 /* CustomControlsView.m */,
 				FB1A674B2131E65900507771 /* KeyboardSupport.h */,
 				FB1A674C2131E65900507771 /* KeyboardSupport.m */,
 				9897B6A0221260EF00966419 /* Controller.m */,
@@ -576,6 +598,10 @@
 				FB89462519F646E200339C8A /* MainFrameViewController.m */,
 				FB89462619F646E200339C8A /* StreamFrameViewController.h */,
 				FB89462719F646E200339C8A /* StreamFrameViewController.m */,
+				CA5E00000000000000000007 /* CustomLayoutListViewController.h */,
+				CA5E00000000000000000008 /* CustomLayoutListViewController.m */,
+				CA5E00000000000000000009 /* CustomControlsEditorViewController.h */,
+				CA5E0000000000000000000A /* CustomControlsEditorViewController.m */,
 				FBD3494E19FF2174002D2A60 /* SettingsViewController.h */,
 				FBD3494F19FF2174002D2A60 /* SettingsViewController.m */,
 				FB4A23B61A9D3637004D2EF2 /* LoadingFrameViewController.h */,
@@ -682,6 +708,8 @@
 				98D5856C1C0EA79600F6CC00 /* TemporaryHost.m */,
 				98D5856E1C0ED0E800F6CC00 /* TemporarySettings.h */,
 				98D5856F1C0ED0E800F6CC00 /* TemporarySettings.m */,
+				CA5E00000000000000000005 /* TemporaryCustomLayout.h */,
+				CA5E00000000000000000006 /* TemporaryCustomLayout.m */,
 			);
 			name = Database;
 			sourceTree = "<group>";
@@ -879,6 +907,8 @@
 				FB1A67A7213245BD00507771 /* StreamManager.m in Sources */,
 				FB1A67A9213245BD00507771 /* VideoDecoderRenderer.m in Sources */,
 				FB1A67A12132458C00507771 /* main.m in Sources */,
+				CA5E000000000000000000B2 /* CustomLayoutDocument.m in Sources */,
+				CA5E000000000000000000B5 /* TemporaryCustomLayout.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -935,6 +965,11 @@
 				FB9AFD3A1A7E05CE00872C98 /* ServerInfoResponse.m in Sources */,
 				FB89463119F646E200339C8A /* StreamManager.m in Sources */,
 				988FCD41293B091B003050E2 /* KeyboardInputField.m in Sources */,
+				CA5E000000000000000000B1 /* CustomLayoutDocument.m in Sources */,
+				CA5E000000000000000000B3 /* CustomControlsView.m in Sources */,
+				CA5E000000000000000000B4 /* TemporaryCustomLayout.m in Sources */,
+				CA5E000000000000000000B6 /* CustomLayoutListViewController.m in Sources */,
+				CA5E000000000000000000B7 /* CustomControlsEditorViewController.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1361,6 +1396,7 @@
 		FB290D0519B2C406004C83CF /* Limelight.xcdatamodeld */ = {
 			isa = XCVersionGroup;
 			children = (
+				C0FFEE000000000000000012 /* Moonlight v1.12.xcdatamodel */,
 				C0FFEE000000000000000011 /* Moonlight v1.11.xcdatamodel */,
 				9874E8962AE95E1D00130A3C /* Moonlight v1.10.xcdatamodel */,
 				986E28A528EA989100758361 /* Moonlight v1.9.xcdatamodel */,
@@ -1378,7 +1414,7 @@
 				FB4678F21A51BDCB00377732 /* Limelight 0.3.0.xcdatamodel */,
 				FB290D0619B2C406004C83CF /* Limelight.xcdatamodel */,
 			);
-			currentVersion = C0FFEE000000000000000011 /* Moonlight v1.11.xcdatamodel */;
+			currentVersion = C0FFEE000000000000000012 /* Moonlight v1.12.xcdatamodel */;
 			path = Limelight.xcdatamodeld;
 			sourceTree = "<group>";
 			versionGroupType = wrapper.xcdatamodel;

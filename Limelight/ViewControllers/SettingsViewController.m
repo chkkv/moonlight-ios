@@ -9,6 +9,8 @@
 #import "SettingsViewController.h"
 #import "TemporarySettings.h"
 #import "DataManager.h"
+#import "OnScreenControls.h"
+#import "CustomLayoutListViewController.h"
 
 #import <VideoToolbox/VideoToolbox.h>
 #import <AVFoundation/AVFoundation.h>
@@ -16,6 +18,9 @@
 @implementation SettingsViewController {
     NSInteger _bitrate;
     NSInteger _lastSelectedResolutionIndex;
+    // Guards against one tap on the "Manage Layouts" row presenting twice, since
+    // that row has several control events registered (see viewDidLoad).
+    BOOL _isPresentingCustomLayouts;
 }
 
 @dynamic overrideUserInterfaceStyle;
@@ -265,6 +270,24 @@ BOOL isCustomResolution(CGSize res) {
     [self.framerateSelector addTarget:self action:@selector(updateBitrate) forControlEvents:UIControlEventValueChanged];
     [self.onscreenControlSelector setSelectedSegmentIndex:onscreenControls];
     [self.onscreenControlSelector setEnabled:!currentSettings.absoluteTouchMode];
+    [self.onscreenControlSelector addTarget:self action:@selector(onscreenControlsChanged) forControlEvents:UIControlEventValueChanged];
+    [self.customOverlaySelector setSelectedSegmentIndex:currentSettings.customOverlayEnabled ? 1 : 0];
+    [self.customOverlaySelector addTarget:self action:@selector(customOverlayChanged) forControlEvents:UIControlEventValueChanged];
+    // Single momentary segment used as a push button; UISegmentedControl is used
+    // rather than UIButton because viewDidLayoutSubviews only counts labels,
+    // segmented controls and sliders when sizing the scroll content.
+    self.customLayoutsSelector.momentary = YES;
+    // A single-segment UISegmentedControl does not reliably report a tap through
+    // control events: UIControlEventTouchUpInside alone silently did nothing on
+    // iOS 26. Drive the row from a tap recogniser, and keep the documented
+    // valueChanged as a fallback; -customLayoutsTapped coalesces duplicates.
+    [self.customLayoutsSelector addTarget:self
+                                   action:@selector(customLayoutsTapped)
+                         forControlEvents:UIControlEventValueChanged];
+    UITapGestureRecognizer *customLayoutsTap =
+        [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(customLayoutsTapped)];
+    customLayoutsTap.cancelsTouchesInView = NO;
+    [self.customLayoutsSelector addGestureRecognizer:customLayoutsTap];
     [self.bitrateSlider setMinimumValue:0];
     [self.bitrateSlider setMaximumValue:(sizeof(bitrateTable) / sizeof(*bitrateTable)) - 1];
     [self.bitrateSlider setValue:[self getSliderValueForBitrate:_bitrate] animated:YES];
@@ -276,6 +299,44 @@ BOOL isCustomResolution(CGSize res) {
 - (void) touchModeChanged {
     // Disable on-screen controls in absolute touch mode
     [self.onscreenControlSelector setEnabled:[self.touchModeSelector selectedSegmentIndex] == 0];
+}
+
+// The on-screen control presets and the custom overlay are mutually exclusive:
+// the presets own the virtual gamepad channel whenever they are in effect, and
+// the overlay assumes it otherwise. Rather than greying either control out
+// (which would trap the user) the last one touched wins and turns the other off.
+- (void) onscreenControlsChanged {
+    if ([self.onscreenControlSelector selectedSegmentIndex] != OnScreenControlsLevelOff) {
+        [self.customOverlaySelector setSelectedSegmentIndex:0];
+    }
+}
+
+- (void) customOverlayChanged {
+    if ([self.customOverlaySelector selectedSegmentIndex] == 1) {
+        [self.onscreenControlSelector setSelectedSegmentIndex:OnScreenControlsLevelOff];
+    }
+}
+
+- (void) customLayoutsTapped {
+    // The row has several control events registered, so one tap can deliver more
+    // than one of them.
+    if (_isPresentingCustomLayouts) {
+        return;
+    }
+    _isPresentingCustomLayouts = YES;
+
+    CustomLayoutListViewController *listViewController = [[CustomLayoutListViewController alloc] init];
+    UINavigationController *navigationController = [[UINavigationController alloc] initWithRootViewController:listViewController];
+    // Full screen so the editor's canvas gets the whole display and the window
+    // safe area it reads is the same one the live overlay sees.
+    navigationController.modalPresentationStyle = UIModalPresentationFullScreen;
+
+    // Capture self strongly: the block is one-shot and released as soon as the
+    // presentation animation finishes, so it cannot leak. A __weak capture would
+    // not work anyway, since writing an ivar through one is rejected by ARC.
+    [self presentViewController:navigationController animated:YES completion:^{
+        self->_isPresentingCustomLayouts = NO;
+    }];
 }
 
 - (void) updateBitrate {
@@ -566,6 +627,11 @@ BOOL isCustomResolution(CGSize res) {
     BOOL statsOverlay = [self.statsOverlaySelector selectedSegmentIndex] == 1;
     NSInteger bufferFrames = [self getChosenBufferFrames];
     BOOL enableHdr = [self.hdrSelector selectedSegmentIndex] == 1;
+    BOOL customOverlayEnabled = [self.customOverlaySelector selectedSegmentIndex] == 1;
+    // Defensive: never persist both. The presets win, matching isCustomOverlayActive.
+    if (onscreenControls != OnScreenControlsLevelOff) {
+        customOverlayEnabled = NO;
+    }
     [dataMan saveSettingsWithBitrate:_bitrate
                            framerate:framerate
                               height:height
@@ -582,7 +648,8 @@ BOOL isCustomResolution(CGSize res) {
                       btMouseSupport:btMouseSupport
                    absoluteTouchMode:absoluteTouchMode
                         statsOverlay:statsOverlay
-                        bufferFrames:bufferFrames];
+                        bufferFrames:bufferFrames
+               customOverlayEnabled:customOverlayEnabled];
 }
 
 - (void)didReceiveMemoryWarning {

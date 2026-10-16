@@ -7,6 +7,10 @@
 //
 
 #import "StreamView.h"
+
+#if !TARGET_OS_TV
+#import "CustomControlsView.h"
+#endif
 #include <Limelight.h>
 #import "DataManager.h"
 #import "ControllerSupport.h"
@@ -21,7 +25,6 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     OnScreenControls* onScreenControls;
     
     KeyboardInputField* keyInputField;
-    BOOL isInputingText;
     NSMutableSet* keysDown;
     
     float streamAspectRatio;
@@ -127,6 +130,16 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     // This is critical to ensure keyboard events are delivered to this
     // StreamView and not our parent UIView, especially on tvOS.
     [self becomeFirstResponder];
+    
+#if !TARGET_OS_TV
+    // A custom overlay button bound to show-keyboard asks for the keyboard here
+    // rather than reaching for the private text field. NSNotificationCenter
+    // unregisters selector-based observers by itself when this view goes away.
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(showKeyboardNotification:)
+                                                 name:CustomControlsViewShowKeyboardNotification
+                                               object:nil];
+#endif
 }
 
 - (void)startInteractionTimer {
@@ -369,45 +382,68 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         }
         
         if ([[event allTouches] count] == 3) {
-            if (isInputingText) {
+            // Ask the field instead of tracking a flag of our own: the keyboard
+            // can also be dismissed by its own controls, which never reach this
+            // class, and a cached flag would then insist it is still up and
+            // refuse to reopen it.
+            if ([keyInputField isFirstResponder]) {
                 // Closing is never suppressed: the keyboard must always stay
                 // dismissable, even while a control is held down.
-                Log(LOG_D, @"Closing the keyboard");
-                [keyInputField resignFirstResponder];
-                isInputingText = false;
+                [self hideKeyboard];
             } else if (foreignTouches == 0) {
-                Log(LOG_D, @"Opening the keyboard");
-                // Prepare the textbox used to capture keyboard events.
-                keyInputField.delegate = self;
-                keyInputField.text = @"0";
-#if !TARGET_OS_TV
-                // Prepare the toolbar above the keyboard for more options
-                UIToolbar *customToolbarView = [[UIToolbar alloc] initWithFrame:CGRectMake(0, 0, self.bounds.size.width, 44)];
-                
-                UIBarButtonItem *doneBarButton = [self createButtonWithImageNamed:@"DoneIcon.png" backgroundColor:[UIColor clearColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0x00 isToggleable:NO];
-                UIBarButtonItem *windowsBarButton = [self createButtonWithImageNamed:@"WindowsIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0x5B isToggleable:YES];
-                UIBarButtonItem *tabBarButton = [self createButtonWithImageNamed:@"TabIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0x09 isToggleable:NO];
-                UIBarButtonItem *shiftBarButton = [self createButtonWithImageNamed:@"ShiftIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0xA0 isToggleable:YES];
-                UIBarButtonItem *escapeBarButton = [self createButtonWithImageNamed:@"EscapeIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0x1B isToggleable:NO];
-                UIBarButtonItem *controlBarButton = [self createButtonWithImageNamed:@"ControlIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0xA2 isToggleable:YES];
-                UIBarButtonItem *altBarButton = [self createButtonWithImageNamed:@"AltIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0xA4 isToggleable:YES];
-                UIBarButtonItem *deleteBarButton = [self createButtonWithImageNamed:@"DeleteIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0x2E isToggleable:NO];
-                UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
-                
-                [customToolbarView setItems:[NSArray arrayWithObjects:doneBarButton, windowsBarButton, escapeBarButton, tabBarButton, shiftBarButton, controlBarButton, altBarButton, deleteBarButton, flexibleSpace, nil]];
-                keyInputField.inputAccessoryView = customToolbarView;
-#endif
-                [keyInputField becomeFirstResponder];
-                [keyInputField addTarget:self action:@selector(onKeyboardPressed:) forControlEvents:UIControlEventEditingChanged];
-                
-                // Undo causes issues for our state management, so turn it off
-                [keyInputField.undoManager disableUndoRegistration];
-                
-                isInputingText = true;
+                [self showKeyboard];
             }
         }
     }
 }
+
+// Summons the software keyboard. The three-finger gesture and a custom overlay
+// button bound to show-keyboard both end up here.
+- (void)showKeyboard {
+    if ([keyInputField isFirstResponder]) {
+        return;
+    }
+    
+    Log(LOG_D, @"Opening the keyboard");
+    // Prepare the textbox used to capture keyboard events.
+    keyInputField.delegate = self;
+    keyInputField.text = @"0";
+#if !TARGET_OS_TV
+    // Prepare the toolbar above the keyboard for more options
+    UIToolbar *customToolbarView = [[UIToolbar alloc] initWithFrame:CGRectMake(0, 0, self.bounds.size.width, 44)];
+    
+    UIBarButtonItem *doneBarButton = [self createButtonWithImageNamed:@"DoneIcon.png" backgroundColor:[UIColor clearColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0x00 isToggleable:NO];
+    UIBarButtonItem *windowsBarButton = [self createButtonWithImageNamed:@"WindowsIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0x5B isToggleable:YES];
+    UIBarButtonItem *tabBarButton = [self createButtonWithImageNamed:@"TabIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0x09 isToggleable:NO];
+    UIBarButtonItem *shiftBarButton = [self createButtonWithImageNamed:@"ShiftIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0xA0 isToggleable:YES];
+    UIBarButtonItem *escapeBarButton = [self createButtonWithImageNamed:@"EscapeIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0x1B isToggleable:NO];
+    UIBarButtonItem *controlBarButton = [self createButtonWithImageNamed:@"ControlIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0xA2 isToggleable:YES];
+    UIBarButtonItem *altBarButton = [self createButtonWithImageNamed:@"AltIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0xA4 isToggleable:YES];
+    UIBarButtonItem *deleteBarButton = [self createButtonWithImageNamed:@"DeleteIcon.png" backgroundColor:[UIColor blackColor] target:self action:@selector(toolbarButtonClicked:) keyCode:0x2E isToggleable:NO];
+    UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
+    
+    [customToolbarView setItems:[NSArray arrayWithObjects:doneBarButton, windowsBarButton, escapeBarButton, tabBarButton, shiftBarButton, controlBarButton, altBarButton, deleteBarButton, flexibleSpace, nil]];
+    keyInputField.inputAccessoryView = customToolbarView;
+#endif
+    [keyInputField becomeFirstResponder];
+    [keyInputField addTarget:self action:@selector(onKeyboardPressed:) forControlEvents:UIControlEventEditingChanged];
+    
+    // Undo causes issues for our state management, so turn it off
+    [keyInputField.undoManager disableUndoRegistration];
+    
+    
+}
+
+- (void)hideKeyboard {
+    Log(LOG_D, @"Closing the keyboard");
+    [keyInputField resignFirstResponder];
+}
+
+#if !TARGET_OS_TV
+- (void)showKeyboardNotification:(NSNotification*)notification {
+    [self showKeyboard];
+}
+#endif
 
 - (UIBarButtonItem *)createButtonWithImageNamed:(NSString *)imageName backgroundColor:(UIColor *)backgroundColor target:(id)target action:(SEL)action keyCode:(NSInteger)keyCode isToggleable:(BOOL)isToggleable {
     UIImage *image = [UIImage imageNamed:imageName];
@@ -450,7 +486,6 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     // Close keyboard if done button clicked
     if (!keyCode) {
         [keyInputField resignFirstResponder];
-        isInputingText = false;
     }
     else {
         // Send key press event using keyCode parameter, toggle if necessary

@@ -87,6 +87,7 @@
     self.absoluteTouchMode = settings.absoluteTouchMode;
     self.statsOverlay = settings.statsOverlay;
     self.bufferFrames = settings.bufferFrames;
+    self.customOverlayEnabled = settings.customOverlayEnabled;
 #endif
     self.uniqueId = settings.uniqueId;
     

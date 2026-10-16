@@ -39,6 +39,11 @@
 // original lowest-latency behaviour (drain the queue down to 1 frame).
 @property (nonatomic) NSInteger bufferFrames;
 
+// Whether the user-authored custom control overlay is turned on. The overlay
+// and the on-screen control presets are mutually exclusive: when the presets
+// are enabled (onscreenControls != Off) the overlay is inert.
+@property (nonatomic) BOOL customOverlayEnabled;
+
 - (id) initFromSettings:(Settings*)settings;
 
 @end

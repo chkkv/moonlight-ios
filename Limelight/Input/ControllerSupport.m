@@ -1061,7 +1061,12 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     // Even if no gamepads are present, we will always count one if OSC is enabled,
     // or it's set to auto and no keyboard or mouse is present. Absolute touch mode
     // disables the OSC.
-    if (level != OnScreenControlsLevelOff && (![ControllerSupport hasKeyboardOrMouse] || level != OnScreenControlsLevelAuto) && !settings.absoluteTouchMode) {
+    //
+    // The custom overlay also announces player 0, and unlike the presets it stays
+    // active in absolute touch mode, so its check deliberately ignores
+    // absoluteTouchMode.
+    if ([dataMan isCustomOverlayActive] ||
+        (level != OnScreenControlsLevelOff && (![ControllerSupport hasKeyboardOrMouse] || level != OnScreenControlsLevelAuto) && !settings.absoluteTouchMode)) {
         mask |= 0x1;
     }
     
@@ -1088,7 +1093,12 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     _oscController.playerIndex = 0;
 
     DataManager* dataMan = [[DataManager alloc] init];
-    _oscEnabled = (OnScreenControlsLevel)[[dataMan getSettings].onscreenControls integerValue] != OnScreenControlsLevelOff;
+    // The virtual gamepad channel is shared by the on-screen control presets and
+    // the custom overlay. Only one of them can be in effect at a time (they are
+    // mutually exclusive), but the channel must be live for either, otherwise
+    // arrival is never reported and LiSendMultiControllerEvent is never called.
+    _oscEnabled = (OnScreenControlsLevel)[[dataMan getSettings].onscreenControls integerValue] != OnScreenControlsLevelOff ||
+                  [dataMan isCustomOverlayActive];
     
     Log(LOG_I, @"Number of supported controllers connected: %d", [ControllerSupport getGamepadCount]);
     Log(LOG_I, @"Multi-controller: %d", _multiController);

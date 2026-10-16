@@ -27,6 +27,9 @@
 @property (strong, nonatomic) IBOutlet UISegmentedControl *btMouseSelector;
 @property (strong, nonatomic) IBOutlet UISegmentedControl *statsOverlaySelector;
 @property (strong, nonatomic) IBOutlet UISegmentedControl *bufferFramesSelector;
+// Custom overlay: Off/On, plus a single-segment row that opens the layout list.
+@property (strong, nonatomic) IBOutlet UISegmentedControl *customOverlaySelector;
+@property (strong, nonatomic) IBOutlet UISegmentedControl *customLayoutsSelector;
 @property (strong, nonatomic) IBOutlet UIScrollView *scrollView;
 
 #pragma clang diagnostic push

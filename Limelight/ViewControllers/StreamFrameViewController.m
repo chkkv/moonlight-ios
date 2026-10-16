@@ -12,6 +12,7 @@
 #import "StreamManager.h"
 #import "ControllerSupport.h"
 #import "DataManager.h"
+#import "CustomControlsView.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -45,6 +46,7 @@
     UIActivityIndicatorView *_spinner;
     StreamView *_streamView;
     UIScrollView *_scrollView;
+    CustomControlsView *_customControlsView;
     BOOL _userIsInteracting;
     CGSize _keyboardSize;
     
@@ -209,7 +211,39 @@
     [self.view addSubview:_stageLabel];
     [self.view addSubview:_spinner];
     [self.view addSubview:_tipLabel];
+    
+#if !TARGET_OS_TV
+    [self setupCustomControlsOverlay];
+#endif
 }
+
+#if !TARGET_OS_TV
+// Mounts the user-authored overlay above the stream view. It must be added
+// after the stream view (and after the zoom/pan scroll view in absolute touch
+// mode) so it is hit-tested first; CustomControlsView then declines every touch
+// that does not land on a control, so the touch handlers underneath keep working.
+- (void)setupCustomControlsOverlay {
+    DataManager *dataMan = [[DataManager alloc] init];
+    if (![dataMan isCustomOverlayActive]) {
+        Log(LOG_I, @"Custom control overlay is not active");
+        return;
+    }
+    
+    TemporaryCustomLayout *activeLayout = [dataMan getActiveCustomLayout];
+    if (activeLayout.document == nil) {
+        return;
+    }
+    
+    _customControlsView = [[CustomControlsView alloc] initWithLayout:activeLayout.document
+                                                   controllerSupport:_controllerSupport];
+    _customControlsView.frame = self.view.bounds;
+    _customControlsView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [self.view addSubview:_customControlsView];
+    
+    Log(LOG_I, @"Custom control overlay active with layout '%@' (%lu controls)",
+        activeLayout.name, (unsigned long)activeLayout.document.controls.count);
+}
+#endif
 
 - (UIView *)viewForZoomingInScrollView:(UIScrollView *)scrollView {
     return _streamView;
@@ -218,6 +252,13 @@
 - (void)willMoveToParentViewController:(UIViewController *)parent {
     // Only cleanup when we're being destroyed
     if (parent == nil) {
+#if !TARGET_OS_TV
+        // Let go of any control the user was still holding, so the host does not
+        // keep a stuck button after the stream ends.
+        [_customControlsView releaseAllInputs];
+        [_customControlsView removeFromSuperview];
+        _customControlsView = nil;
+#endif
         [_controllerSupport cleanup];
         [UIApplication sharedApplication].idleTimerDisabled = NO;
         [_streamMan stopStream];

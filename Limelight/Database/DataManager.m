@@ -9,6 +9,7 @@
 #import "DataManager.h"
 #import "TemporaryApp.h"
 #import "TemporarySettings.h"
+#import "OnScreenControls.h"
 
 @implementation DataManager {
     NSManagedObjectContext *_managedObjectContext;
@@ -68,7 +69,8 @@
                   btMouseSupport:(BOOL)btMouseSupport
                absoluteTouchMode:(BOOL)absoluteTouchMode
                     statsOverlay:(BOOL)statsOverlay
-                    bufferFrames:(NSInteger)bufferFrames {
+                    bufferFrames:(NSInteger)bufferFrames
+           customOverlayEnabled:(BOOL)customOverlayEnabled {
     
     [_managedObjectContext performBlockAndWait:^{
         Settings* settingsToSave = [self retrieveSettings];
@@ -89,6 +91,7 @@
         settingsToSave.absoluteTouchMode = absoluteTouchMode;
         settingsToSave.statsOverlay = statsOverlay;
         settingsToSave.bufferFrames = (int16_t)bufferFrames;
+        settingsToSave.customOverlayEnabled = customOverlayEnabled;
         
         [self saveData];
     }];
@@ -241,6 +244,152 @@
     //TODO: handle errors
     
     return fetchedRecords;
+}
+
+#pragma mark - Custom overlay layouts
+
+// Only call from within performBlockAndWait!!!
+- (CustomLayout*) getCustomLayoutForTemporaryLayout:(TemporaryCustomLayout*)tempLayout
+                                withLayoutRecords:(NSArray*)layouts {
+    for (CustomLayout* layout in layouts) {
+        if (tempLayout.layoutId != nil && [layout.id isEqualToString:tempLayout.layoutId]) {
+            return layout;
+        }
+    }
+    
+    return nil;
+}
+
+- (NSArray<TemporaryCustomLayout*>*) getCustomLayouts {
+    __block NSMutableArray *tempLayouts = [[NSMutableArray alloc] init];
+    
+    [_managedObjectContext performBlockAndWait:^{
+        for (CustomLayout* layout in [self fetchRecords:@"CustomLayout"]) {
+            [tempLayouts addObject:[[TemporaryCustomLayout alloc] initFromCustomLayout:layout]];
+        }
+    }];
+    
+    [tempLayouts sortUsingSelector:@selector(compareSortOrder:)];
+    
+    return tempLayouts;
+}
+
+- (TemporaryCustomLayout*) getActiveCustomLayout {
+    __block NSString *activeLayoutId = nil;
+    
+    // Reads the raw managed object rather than getSettings so this cannot
+    // recurse through TemporarySettings while settings are being constructed.
+    [_managedObjectContext performBlockAndWait:^{
+        activeLayoutId = [self retrieveSettings].activeLayoutId;
+    }];
+    
+    if (activeLayoutId.length == 0) {
+        return nil;
+    }
+    
+    for (TemporaryCustomLayout* layout in [self getCustomLayouts]) {
+        if ([layout.layoutId isEqualToString:activeLayoutId]) {
+            return layout;
+        }
+    }
+    
+    return nil;
+}
+
+- (BOOL) isCustomOverlayActive {
+    TemporarySettings* settings = [self getSettings];
+    if (!settings.customOverlayEnabled) {
+        return NO;
+    }
+    
+    // Mutual exclusion: the on-screen control presets win whenever they are
+    // actually in effect. Absolute touch mode forces the presets off at runtime
+    // (see StreamView), so the overlay is allowed there - that is the point of
+    // the feature.
+    BOOL presetsInEffect = ([settings.onscreenControls integerValue] != OnScreenControlsLevelOff) &&
+                           !settings.absoluteTouchMode;
+    if (presetsInEffect) {
+        return NO;
+    }
+    
+    // An enabled overlay with nothing to draw is inert rather than a virtual
+    // gamepad that announces itself and never sends anything.
+    TemporaryCustomLayout* active = [self getActiveCustomLayout];
+    return active != nil && active.document != nil && ![active.document isEmpty];
+}
+
+- (void) addCustomLayout:(TemporaryCustomLayout*)layout {
+    if (layout.document == nil) {
+        Log(LOG_E, @"Refusing to add a custom layout without a decodable document.");
+        return;
+    }
+    
+    [_managedObjectContext performBlockAndWait:^{
+        if (layout.layoutId.length == 0) {
+            layout.layoutId = [[NSUUID UUID] UUIDString];
+        }
+        
+        // Append at the end of the current order.
+        int32_t maxOrder = -1;
+        for (CustomLayout* row in [self fetchRecords:@"CustomLayout"]) {
+            if (row.sortOrder > maxOrder) {
+                maxOrder = row.sortOrder;
+            }
+        }
+        layout.sortOrder = maxOrder + 1;
+        
+        NSEntityDescription* entity = [NSEntityDescription entityForName:@"CustomLayout" inManagedObjectContext:_managedObjectContext];
+        CustomLayout* parent = [[CustomLayout alloc] initWithEntity:entity insertIntoManagedObjectContext:_managedObjectContext];
+        parent.settings = [self retrieveSettings];
+        [layout propagateChangesToParent:parent];
+        
+        [self saveData];
+    }];
+}
+
+- (void) updateCustomLayout:(TemporaryCustomLayout*)layout {
+    [_managedObjectContext performBlockAndWait:^{
+        CustomLayout* parent = [self getCustomLayoutForTemporaryLayout:layout
+                                                     withLayoutRecords:[self fetchRecords:@"CustomLayout"]];
+        if (parent == nil) {
+            Log(LOG_W, @"Custom layout '%@' no longer exists, update ignored.", layout.layoutId);
+            return;
+        }
+        
+        [layout propagateChangesToParent:parent];
+        
+        [self saveData];
+    }];
+}
+
+- (void) removeCustomLayout:(TemporaryCustomLayout*)layout {
+    [_managedObjectContext performBlockAndWait:^{
+        CustomLayout* parent = [self getCustomLayoutForTemporaryLayout:layout
+                                                     withLayoutRecords:[self fetchRecords:@"CustomLayout"]];
+        if (parent == nil) {
+            return;
+        }
+        
+        // Clear the selection before deleting, otherwise activeLayoutId would
+        // keep pointing at a row that no longer exists.
+        Settings* settings = [self retrieveSettings];
+        if (settings.activeLayoutId != nil && [settings.activeLayoutId isEqualToString:parent.id]) {
+            settings.activeLayoutId = nil;
+        }
+        
+        [self->_managedObjectContext deleteObject:parent];
+        
+        [self saveData];
+    }];
+}
+
+- (void) activateCustomLayout:(NSString*)layoutId {
+    [_managedObjectContext performBlockAndWait:^{
+        Settings* settings = [self retrieveSettings];
+        settings.activeLayoutId = (layoutId.length > 0) ? layoutId : nil;
+        
+        [self saveData];
+    }];
 }
 
 @end
