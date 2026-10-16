@@ -44,6 +44,14 @@
 // are enabled (onscreenControls != Off) the overlay is inert.
 @property (nonatomic) BOOL customOverlayEnabled;
 
+// Whether the host list is always shown on launch instead of going straight into
+// the only saved host. A launch preference rather than a stream parameter, so it
+// lives in NSUserDefaults instead of the CoreData Settings entity and needs no
+// model version change. Declared here so the settings screen and the main screen
+// cannot drift apart on the key; the tvOS settings bundle spells the same key out
+// in Root.plist, which cannot reference a constant.
+extern NSString * const AlwaysShowHostListKey;
+
 - (id) initFromSettings:(Settings*)settings;
 
 @end

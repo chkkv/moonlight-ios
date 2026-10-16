@@ -1005,8 +1005,14 @@ static NSMutableSet* hostList;
     
     [self retrieveSavedHosts];
     _discMan = [[DiscoveryManager alloc] initWithHosts:[hostList allObjects] andCallback:self];
-        
-    if ([hostList count] == 1) {
+    
+    // With exactly one saved host the host list is skipped and that host is opened
+    // directly. This setting makes the list always show instead. It is read from
+    // NSUserDefaults rather than the CoreData settings because it is a launch
+    // preference, not a stream parameter.
+    BOOL alwaysShowHostList = [[NSUserDefaults standardUserDefaults] boolForKey:AlwaysShowHostListKey];
+    
+    if (!alwaysShowHostList && [hostList count] == 1) {
         [self hostClicked:[hostList anyObject] view:nil];
     }
     else {

@@ -273,6 +273,10 @@ BOOL isCustomResolution(CGSize res) {
     [self.onscreenControlSelector addTarget:self action:@selector(onscreenControlsChanged) forControlEvents:UIControlEventValueChanged];
     [self.customOverlaySelector setSelectedSegmentIndex:currentSettings.customOverlayEnabled ? 1 : 0];
     [self.customOverlaySelector addTarget:self action:@selector(customOverlayChanged) forControlEvents:UIControlEventValueChanged];
+    // Read straight from NSUserDefaults: this row is a launch preference, so it is
+    // not part of the CoreData settings the rest of this screen loads.
+    [self.showHostListSelector setSelectedSegmentIndex:
+        [[NSUserDefaults standardUserDefaults] boolForKey:AlwaysShowHostListKey] ? 1 : 0];
     // Single momentary segment used as a push button; UISegmentedControl is used
     // rather than UIButton because viewDidLayoutSubviews only counts labels,
     // segmented controls and sliders when sizing the scroll content.
@@ -650,6 +654,11 @@ BOOL isCustomResolution(CGSize res) {
                         statsOverlay:statsOverlay
                         bufferFrames:bufferFrames
                customOverlayEnabled:customOverlayEnabled];
+
+    // Not part of the streaming settings above: this one is a launch preference,
+    // so it goes to NSUserDefaults instead of the CoreData Settings entity.
+    [[NSUserDefaults standardUserDefaults] setBool:[self.showHostListSelector selectedSegmentIndex] == 1
+                                            forKey:AlwaysShowHostListKey];
 }
 
 - (void)didReceiveMemoryWarning {

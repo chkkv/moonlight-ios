@@ -30,6 +30,9 @@
 // Custom overlay: Off/On, plus a single-segment row that opens the layout list.
 @property (strong, nonatomic) IBOutlet UISegmentedControl *customOverlaySelector;
 @property (strong, nonatomic) IBOutlet UISegmentedControl *customLayoutsSelector;
+// No/Yes: always show the host list on launch instead of going straight into the
+// only saved host. Stored in NSUserDefaults, not in the CoreData settings.
+@property (strong, nonatomic) IBOutlet UISegmentedControl *showHostListSelector;
 @property (strong, nonatomic) IBOutlet UIScrollView *scrollView;
 
 #pragma clang diagnostic push

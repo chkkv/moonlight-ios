@@ -9,6 +9,8 @@
 #import "TemporarySettings.h"
 #import "OnScreenControls.h"
 
+NSString * const AlwaysShowHostListKey = @"alwaysShowHostList";
+
 @implementation TemporarySettings
 
 - (id) initFromSettings:(Settings*)settings {
