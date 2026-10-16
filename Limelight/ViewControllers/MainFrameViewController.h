@@ -19,7 +19,9 @@
 
 @property (weak, nonatomic) IBOutlet UIBarButtonItem *settingsButton;
 #if !TARGET_OS_TV
-@property (weak, nonatomic) IBOutlet UIBarButtonItem *upButton;
+// Strong, not weak: disableUpButton takes the item out of the navigation bar, so
+// a weak reference would deallocate it and it could not be restored.
+@property (strong, nonatomic) IBOutlet UIBarButtonItem *upButton;
 #endif
 
 @end

@@ -119,12 +119,17 @@ static NSMutableSet* hostList;
 - (void)disableUpButton {
 #if !TARGET_OS_TV
     [self->_upButton setTitle:nil];
+    // A titleless UIBarButtonItem is laid out as a wide empty capsule on iOS 26.
+    // There is nothing to go "up" to when no host is selected, so take the item
+    // out of the bar entirely rather than leaving a blank one in place.
+    self.navigationItem.rightBarButtonItem = nil;
 #endif
 }
 
 - (void)enableUpButton {
 #if !TARGET_OS_TV
     [self->_upButton setTitle:@"Select New Host"];
+    self.navigationItem.rightBarButtonItem = self->_upButton;
 #endif
 }
 
@@ -980,7 +985,10 @@ static NSMutableSet* hostList;
     _boxArtCache = [[NSCache alloc] init];
         
     hostScrollView = [[ComputerScrollView alloc] init];
-    hostScrollView.frame = CGRectMake(0, self.navigationController.navigationBar.frame.origin.y + self.navigationController.navigationBar.frame.size.height, self.view.frame.size.width, self.view.frame.size.height / 2);
+    // Only an initial value: the size here is still the portrait one, because
+    // viewDidLoad runs before the landscape-only rotation is applied.
+    // -viewDidLayoutSubviews recomputes it before anything is displayed.
+    hostScrollView.frame = [self hostScrollViewFrame];
     [hostScrollView setShowsHorizontalScrollIndicator:NO];
     hostScrollView.delaysContentTouches = NO;
     
@@ -1093,6 +1101,51 @@ static NSMutableSet* hostList;
     [_discMan stopDiscovery];
 }
 
+// The host picker's frame has to follow the view's size, but it was derived once
+// in -viewDidLoad from self.view.frame. The app is landscape-only, and viewDidLoad
+// runs before that rotation is applied, so the size there is still the portrait
+// one. The scroll view was therefore left at 430x466 inside a 932x430 screen:
+// the host items were clipped at the portrait width (the "Add Host Manually"
+// label and its icon were cut in half) and, because they are centred on half the
+// scroll view's height, pushed far enough down to be cut off by the bottom edge.
+//
+// Derive it from the current bounds instead, and recompute whenever the layout
+// changes, which also covers split view and any later size change.
+- (CGRect)hostScrollViewFrame {
+    CGRect navBar = self.navigationController.navigationBar.frame;
+    return CGRectMake(0,
+                      CGRectGetMaxY(navBar),
+                      self.view.bounds.size.width,
+                      self.view.bounds.size.height / 2);
+}
+
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    
+    if (hostScrollView == nil) {
+        return;
+    }
+    
+    CGRect desired = [self hostScrollViewFrame];
+    CGRect current = hostScrollView.frame;
+    
+    // Compare with a tolerance rather than for exact equality: the navigation
+    // bar's frame can settle by sub-pixel amounts between passes, and updateHosts
+    // is far too heavy to run on every one of them.
+    if (CGSizeEqualToSize(current.size, desired.size) &&
+        fabs(current.origin.y - desired.origin.y) < 0.5) {
+        return;
+    }
+    
+    hostScrollView.frame = desired;
+    
+    // The item centres are written as hostScrollView.frame.size.height / 2 when
+    // the list is built, so a new frame on its own would leave them where they
+    // were. Rebuilding is heavy but this only runs when the size actually
+    // changes.
+    [self updateHosts];
+}
+
 - (void)viewDidAppear:(BOOL)animated
 {
     [super viewDidAppear:animated];
@@ -1103,10 +1156,27 @@ static NSMutableSet* hostList;
     
     [self.navigationController setNavigationBarHidden:NO animated:YES];
     
-    // Hide 1px border line
-    UIImage* fakeImage = [[UIImage alloc] init];
-    [self.navigationController.navigationBar setShadowImage:fakeImage];
-    [self.navigationController.navigationBar setBackgroundImage:fakeImage forBarPosition:UIBarPositionAny barMetrics:UIBarMetricsDefault];
+    // The old approach here was to set an empty UIImage as the bar's background
+    // and shadow, which made the bar transparent so the 1px border disappeared.
+    // On iOS 26 a transparent bar has nothing behind it and the window's black
+    // background shows through, so instead give the bar an explicit opaque
+    // appearance matching the collection view and drop only the shadow.
+    UINavigationBar* navigationBar = self.navigationController.navigationBar;
+    UINavigationBarAppearance* appearance = [[UINavigationBarAppearance alloc] init];
+    [appearance configureWithOpaqueBackground];
+    appearance.backgroundColor = [UIColor colorWithRed:0.3333333432674408
+                                                green:0.3333333432674408
+                                                 blue:0.3333333432674408
+                                                alpha:1];
+    appearance.shadowColor = [UIColor clearColor];
+    appearance.titleTextAttributes = [NSDictionary dictionaryWithObject:[UIColor whiteColor]
+                                                                forKey:NSForegroundColorAttributeName];
+    navigationBar.standardAppearance = appearance;
+    navigationBar.compactAppearance = appearance;
+    navigationBar.scrollEdgeAppearance = appearance;
+    // compactScrollEdgeAppearance is deliberately left alone: it is not needed
+    // (the edge falls back to scrollEdgeAppearance) and its tvOS availability is
+    // less certain than the three above.
     
     // Check for a pending shortcut action when appearing
     [self handlePendingShortcutAction];

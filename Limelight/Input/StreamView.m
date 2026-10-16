@@ -351,12 +351,31 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         // is triggered.
         [touchHandler touchesBegan:touches withEvent:event];
         
+        // UIEvent.allTouches is window-wide: a finger resting on a view layered
+        // over this one, such as a custom control overlay button, is counted too.
+        // One held control plus a two-finger tap would then look exactly like a
+        // three-finger gesture and pop the keyboard up over the stream.
+        //
+        // Count the touches that belong somewhere else, and refuse to open the
+        // keyboard while any of them is down. A nil view is treated as ours: a
+        // touch we cannot attribute must not be able to make the keyboard
+        // unreachable.
+        NSUInteger foreignTouches = 0;
+        for (UITouch* touch in [event allTouches]) {
+            UIView* touched = touch.view;
+            if (touched != nil && touched != self && ![touched isDescendantOfView:self]) {
+                foreignTouches++;
+            }
+        }
+        
         if ([[event allTouches] count] == 3) {
             if (isInputingText) {
+                // Closing is never suppressed: the keyboard must always stay
+                // dismissable, even while a control is held down.
                 Log(LOG_D, @"Closing the keyboard");
                 [keyInputField resignFirstResponder];
                 isInputingText = false;
-            } else {
+            } else if (foreignTouches == 0) {
                 Log(LOG_D, @"Opening the keyboard");
                 // Prepare the textbox used to capture keyboard events.
                 keyInputField.delegate = self;
@@ -397,8 +416,13 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     button.frame = CGRectMake(0, 0, 30, 30);
     button.imageView.contentMode = UIViewContentModeScaleAspectFit;
     button.imageView.backgroundColor = backgroundColor;
-    button.imageView.layer.cornerRadius = 10.0;
-    button.imageEdgeInsets = UIEdgeInsetsMake(6, 6, 6, 6);
+    // Both of these have to stay in proportion with the button: the artwork is
+    // 30pt at its native density, which is exactly the button's own size, so any
+    // inset here draws the glyph smaller than it was made. A 6pt inset used to
+    // be invisible only because the icons were being laid out roughly three
+    // times too large at the time.
+    button.imageView.layer.cornerRadius = 4.0;
+    button.imageEdgeInsets = UIEdgeInsetsZero;
     [button addTarget:target action:action forControlEvents:UIControlEventTouchUpInside];
     objc_setAssociatedObject(button, "keyCode", @(keyCode), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(button, "isToggleable", @(isToggleable), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
