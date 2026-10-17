@@ -12,7 +12,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface AbsoluteTouchHandler : UIResponder
 
--(id)initWithView:(StreamView*)view;
+// multitouch: when YES the touches are forwarded to the host as real touch
+// events instead of driving an emulated absolute mouse. The two behaviours are
+// mutually exclusive.
+-(id)initWithView:(StreamView*)view multitouch:(BOOL)multitouch;
 
 @end
 

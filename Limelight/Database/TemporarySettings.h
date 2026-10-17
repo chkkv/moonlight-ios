@@ -44,6 +44,12 @@
 // are enabled (onscreenControls != Off) the overlay is inert.
 @property (nonatomic) BOOL customOverlayEnabled;
 
+// Touchscreen mode only: forward real multi-touch touches to the host instead of
+// emulating an absolute mouse. The two are mutually exclusive, and this setting is
+// what chooses between them. It needs a host that advertises
+// LI_FF_PEN_TOUCH_EVENTS (Sunshine); touch events are not part of GFE's protocol.
+@property (nonatomic) BOOL multitouchMode;
+
 // Whether the host list is always shown on launch instead of going straight into
 // the only saved host. A launch preference rather than a stream parameter, so it
 // lives in NSUserDefaults instead of the CoreData Settings entity and needs no

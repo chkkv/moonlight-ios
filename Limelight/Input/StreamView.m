@@ -41,6 +41,10 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     double accumulatedMouseDeltaY;
     
     UIResponder* touchHandler;
+    // YES when touchscreen mode is forwarding real touches instead of an
+    // emulated absolute mouse. Also decides whether the three-finger keyboard
+    // gesture is available, since it would collide with the forwarded touches.
+    BOOL multitouchMode;
     
     id<UserInteractionDelegate> interactionDelegate;
     NSTimer* interactionTimer;
@@ -71,7 +75,13 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 #else
     // iOS uses RelativeTouchHandler or AbsoluteTouchHandler depending on user preference
     if (settings.absoluteTouchMode) {
-        self->touchHandler = [[AbsoluteTouchHandler alloc] initWithView:self];
+        // Touchscreen mode. Multitouch decides whether that means real touches or an
+        // emulated absolute mouse. The view has to accept multiple touches before the
+        // handler can receive them at all, and the three-finger keyboard gesture has
+        // to stand down while they are being forwarded.
+        self->multitouchMode = settings.multitouchMode;
+        self.multipleTouchEnabled = multitouchMode;
+        self->touchHandler = [[AbsoluteTouchHandler alloc] initWithView:self multitouch:multitouchMode];
     }
     else {
         self->touchHandler = [[RelativeTouchHandler alloc] initWithView:self];
@@ -381,7 +391,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
             }
         }
         
-        if ([[event allTouches] count] == 3) {
+        if ([[event allTouches] count] == 3 && !multitouchMode) {
             // Ask the field instead of tracking a flag of our own: the keyboard
             // can also be dismissed by its own controls, which never reach this
             // class, and a cached flag would then insist it is still up and

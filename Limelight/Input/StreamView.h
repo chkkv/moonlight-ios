@@ -34,4 +34,10 @@
 - (void) updateCursorLocation:(CGPoint)location isMouse:(BOOL)isMouse;
 #endif
 
+// Shared by the touch handlers and the stylus path: maps a point in this view's
+// coordinates into the letterboxed video area, whose size these send alongside.
+// Exposed so the touch handlers do not have to duplicate the aspect-ratio maths.
+- (CGPoint) adjustCoordinatesForVideoArea:(CGPoint)point;
+- (CGSize) getVideoAreaSize;
+
 @end

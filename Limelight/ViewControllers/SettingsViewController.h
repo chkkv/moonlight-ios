@@ -16,6 +16,10 @@
 @property (strong, nonatomic) IBOutlet UISegmentedControl *resolutionSelector;
 @property (strong, nonatomic) IBOutlet UIView *resolutionDisplayView;
 @property (strong, nonatomic) IBOutlet UISegmentedControl *touchModeSelector;
+// Touchscreen only: No keeps the absolute-mouse emulation, Yes forwards real
+// multi-touch touches. The two are mutually exclusive, so this row is only
+// enabled while Touchscreen is selected.
+@property (strong, nonatomic) IBOutlet UISegmentedControl *multitouchSelector;
 @property (strong, nonatomic) IBOutlet UISegmentedControl *onscreenControlSelector;
 @property (strong, nonatomic) IBOutlet UISegmentedControl *optimizeSettingsSelector;
 @property (strong, nonatomic) IBOutlet UISegmentedControl *multiControllerSelector;

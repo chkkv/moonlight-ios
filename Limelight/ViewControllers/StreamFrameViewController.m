@@ -188,14 +188,22 @@
                                                object: nil];
 #endif
     
-    // Only enable scroll and zoom in absolute touch mode
-    if (_settings.absoluteTouchMode) {
+    // Only enable scroll and zoom in absolute touch mode, and not in multitouch
+    // mode: there the two-finger gesture has to reach the host, and the scroll
+    // view's pinch recogniser would otherwise claim it and cancel the touches
+    // that are being forwarded.
+    if (_settings.absoluteTouchMode && !_settings.multitouchMode) {
         _scrollView = [[UIScrollView alloc] initWithFrame:self.view.frame];
 #if !TARGET_OS_TV
         [_scrollView.panGestureRecognizer setMinimumNumberOfTouches:2];
 #endif
         [_scrollView setShowsHorizontalScrollIndicator:NO];
         [_scrollView setShowsVerticalScrollIndicator:NO];
+        // Every other scroll view in the app sets this. Left at its default, the
+        // scroll view holds touches back from StreamView for its scroll delay,
+        // which is felt as a drag that only starts following the finger once the
+        // finger stops moving.
+        [_scrollView setDelaysContentTouches:NO];
         [_scrollView setDelegate:self];
         [_scrollView setMaximumZoomScale:10.0f];
         
@@ -204,7 +212,8 @@
         [self.view addSubview:_scrollView];
     }
     else {
-        // Add StreamView directly in relative mode
+        // Add StreamView directly otherwise: relative mode, and multitouch mode,
+        // which has no use for the zoom scroll view and needs its gestures free.
         [self.view addSubview:_streamView];
     }
     

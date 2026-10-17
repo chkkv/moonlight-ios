@@ -254,6 +254,8 @@ BOOL isCustomResolution(CGSize res) {
     
     [self.touchModeSelector setSelectedSegmentIndex:currentSettings.absoluteTouchMode ? 1 : 0];
     [self.touchModeSelector addTarget:self action:@selector(touchModeChanged) forControlEvents:UIControlEventValueChanged];
+    [self.multitouchSelector setSelectedSegmentIndex:currentSettings.multitouchMode ? 1 : 0];
+    [self.multitouchSelector setEnabled:[self.touchModeSelector selectedSegmentIndex] == 1];
     [self.statsOverlaySelector setSelectedSegmentIndex:currentSettings.statsOverlay ? 1 : 0];
     [self.btMouseSelector setSelectedSegmentIndex:currentSettings.btMouseSupport ? 1 : 0];
     [self.optimizeSettingsSelector setSelectedSegmentIndex:currentSettings.optimizeGames ? 1 : 0];
@@ -302,7 +304,10 @@ BOOL isCustomResolution(CGSize res) {
 
 - (void) touchModeChanged {
     // Disable on-screen controls in absolute touch mode
-    [self.onscreenControlSelector setEnabled:[self.touchModeSelector selectedSegmentIndex] == 0];
+    BOOL touchscreen = [self.touchModeSelector selectedSegmentIndex] == 1;
+    [self.onscreenControlSelector setEnabled:!touchscreen];
+    // Multitouch only means something in touchscreen mode, so the row follows it.
+    [self.multitouchSelector setEnabled:touchscreen];
 }
 
 // The on-screen control presets and the custom overlay are mutually exclusive:
@@ -629,6 +634,7 @@ BOOL isCustomResolution(CGSize res) {
     BOOL useFramePacing = [self.framePacingSelector selectedSegmentIndex] == 1;
     BOOL absoluteTouchMode = [self.touchModeSelector selectedSegmentIndex] == 1;
     BOOL statsOverlay = [self.statsOverlaySelector selectedSegmentIndex] == 1;
+    BOOL multitouchMode = [self.multitouchSelector selectedSegmentIndex] == 1;
     NSInteger bufferFrames = [self getChosenBufferFrames];
     BOOL enableHdr = [self.hdrSelector selectedSegmentIndex] == 1;
     BOOL customOverlayEnabled = [self.customOverlaySelector selectedSegmentIndex] == 1;
@@ -653,7 +659,8 @@ BOOL isCustomResolution(CGSize res) {
                    absoluteTouchMode:absoluteTouchMode
                         statsOverlay:statsOverlay
                         bufferFrames:bufferFrames
-               customOverlayEnabled:customOverlayEnabled];
+               customOverlayEnabled:customOverlayEnabled
+                      multitouchMode:multitouchMode];
 
     // Not part of the streaming settings above: this one is a launch preference,
     // so it goes to NSUserDefaults instead of the CoreData Settings entity.

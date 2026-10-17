@@ -31,7 +31,8 @@
                absoluteTouchMode:(BOOL)absoluteTouchMode
                     statsOverlay:(BOOL)statsOverlay
                     bufferFrames:(NSInteger)bufferFrames
-           customOverlayEnabled:(BOOL)customOverlayEnabled;
+           customOverlayEnabled:(BOOL)customOverlayEnabled
+                  multitouchMode:(BOOL)multitouchMode;
 
 - (NSArray*) getHosts;
 - (void) updateHost:(TemporaryHost*)host;

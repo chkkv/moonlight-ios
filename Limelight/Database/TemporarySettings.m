@@ -90,6 +90,7 @@ NSString * const AlwaysShowHostListKey = @"alwaysShowHostList";
     self.statsOverlay = settings.statsOverlay;
     self.bufferFrames = settings.bufferFrames;
     self.customOverlayEnabled = settings.customOverlayEnabled;
+    self.multitouchMode = settings.multitouchMode;
 #endif
     self.uniqueId = settings.uniqueId;
     

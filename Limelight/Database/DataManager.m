@@ -70,7 +70,8 @@
                absoluteTouchMode:(BOOL)absoluteTouchMode
                     statsOverlay:(BOOL)statsOverlay
                     bufferFrames:(NSInteger)bufferFrames
-           customOverlayEnabled:(BOOL)customOverlayEnabled {
+           customOverlayEnabled:(BOOL)customOverlayEnabled
+                  multitouchMode:(BOOL)multitouchMode {
     
     [_managedObjectContext performBlockAndWait:^{
         Settings* settingsToSave = [self retrieveSettings];
@@ -92,6 +93,7 @@
         settingsToSave.statsOverlay = statsOverlay;
         settingsToSave.bufferFrames = (int16_t)bufferFrames;
         settingsToSave.customOverlayEnabled = customOverlayEnabled;
+        settingsToSave.multitouchMode = multitouchMode;
         
         [self saveData];
     }];
